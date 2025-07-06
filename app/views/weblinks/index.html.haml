@@ -1,0 +1,29 @@
+%h1 Listing weblinks
+
+%table
+  %thead
+    %tr
+      %th Webpage from
+      %th Webpage to
+      %th Linktype
+      %th Linkvalue
+      %th Info
+      %th
+      %th
+      %th
+
+  %tbody
+    - @weblinks.each do |weblink|
+      %tr
+        %td= weblink.webpage_from
+        %td= weblink.webpage_to
+        %td= weblink.linktype
+        %td= weblink.linkvalue
+        %td= weblink.info
+        %td= link_to 'Show', weblink
+        %td= link_to 'Edit', edit_weblink_path(weblink)
+        %td= link_to 'Destroy', weblink, method: :delete, data: { confirm: 'Are you sure?' }
+
+%br
+
+= link_to 'New Weblink', new_weblink_path

@@ -1,0 +1,27 @@
+%h1 Listing pdfs
+
+%table
+  %thead
+    %tr
+      %th Website
+      %th Url
+      %th Size
+      %th Notes
+      %th
+      %th
+      %th
+
+  %tbody
+    - @pdfs.each do |pdf|
+      %tr
+        %td= pdf.website
+        %td= pdf.url
+        %td= pdf.size
+        %td= pdf.notes
+        %td= link_to 'Show', pdf
+        %td= link_to 'Edit', edit_pdf_path(pdf)
+        %td= link_to 'Destroy', pdf, method: :delete, data: { confirm: 'Are you sure?' }
+
+%br
+
+= link_to 'New Pdf', new_pdf_path

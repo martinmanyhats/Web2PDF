@@ -1,0 +1,18 @@
+%p#notice= notice
+
+%p
+  %b Website:
+  = @pdf.website
+%p
+  %b Url:
+  = @pdf.url
+%p
+  %b Size:
+  = @pdf.size
+%p
+  %b Notes:
+  = @pdf.notes
+
+= link_to 'Edit', edit_pdf_path(@pdf)
+\|
+= link_to 'Back', pdfs_path

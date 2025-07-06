@@ -1,0 +1,29 @@
+%p#notice= notice
+
+%p
+  %b Name:
+  = @website.name
+%p
+  %b Url:
+  = @website.url
+%p
+  %b Auto refresh:
+  = @website.auto_refresh
+%p
+  %b Refresh period:
+  = @website.refresh_period
+%p
+  %b Publish url:
+  = @website.publish_url
+%p
+  %b Status:
+  = @website.status
+%p
+  %b Notes:
+  = @website.notes
+%p
+  = link_to "Scrape", scrape_website_path(@website)
+
+= link_to 'Edit', edit_website_path(@website)
+\|
+= link_to 'Back', websites_path

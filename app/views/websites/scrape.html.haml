@@ -1,0 +1,13 @@
+%h1 Scraping
+
+%table
+  %tbody
+    - @website.webpages.each do |page|
+      %tr
+        %td<= page.name
+        %table
+          %tbody
+            - page.weblinks.each do |link|
+              %tr
+                %td= link.from.url
+                %td= link.to.url
