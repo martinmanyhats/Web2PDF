@@ -7,7 +7,7 @@ class Website < ApplicationRecord
       page.status = "unscraped"
       page.website = self
     end
-    webpage.scrape
+    webpage.to_pdf#scrape
     pp webpage
   end
 end

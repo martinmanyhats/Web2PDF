@@ -62,7 +62,10 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_03_181529) do
     t.integer "refresh_period", default: 86400
     t.string "publish_url"
     t.string "status", default: "unscraped", null: false
-    t.string "notes"
+    t.string "remove_scripts", default: ""
+    t.string "additional_css", default: ""
+    t.string "additional_js", default: ""
+    t.string "notes", default: ""
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
   end

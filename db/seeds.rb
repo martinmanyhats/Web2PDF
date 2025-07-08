@@ -8,4 +8,10 @@
 #     MovieGenre.find_or_create_by!(name: genre_name)
 #   end
 
-website = Website.create(name: "Martin Reed website", url: "https://martinreed.co.uk", status: "unscraped")
+website = Website.create(name: "Deddington History",
+                         url: "https://deddingtonhistory.uk",
+                         status: "unscraped",
+                         remove_scripts: "cookieControl",
+                         additional_css: "",
+                         additional_js: ""
+)

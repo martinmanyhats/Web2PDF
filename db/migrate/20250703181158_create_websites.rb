@@ -7,7 +7,10 @@ class CreateWebsites < ActiveRecord::Migration[8.0]
       t.integer :refresh_period, default: 60 * 60 * 24
       t.string :publish_url
       t.string :status, null: false, default: "unscraped"
-      t.string :notes
+      t.string :remove_scripts, default: ""
+      t.string :additional_css, default: ""
+      t.string :additional_js, default: ""
+      t.string :notes, default: ""
 
       t.timestamps
     end
