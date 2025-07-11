@@ -3,7 +3,7 @@
 %table
   %thead
     %tr
-      %th Name
+      %th Title
       %th Url
       %th Auto refresh
       %th Refresh period
@@ -17,7 +17,7 @@
   %tbody
     - @websites.each do |website|
       %tr
-        %td= website.name
+        %td= website.title
         %td= website.url
         %td= website.auto_refresh
         %td= website.refresh_period

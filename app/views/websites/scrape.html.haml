@@ -2,12 +2,16 @@
 
 %table
   %tbody
-    - @website.webpages.each do |page|
+    - @website.webpages.order(:url).each do |page|
+      - pp page
       %tr
-        %td<= page.name
-        %table
-          %tbody
-            - page.weblinks.each do |link|
-              %tr
-                %td= link.from.url
-                %td= link.to.url
+        %td<= page.title
+        %td<= page.url
+        %td<= page.status
+        %td<= page.scrape_duration&.round(2)
+        %td
+          %table
+            %tbody
+              - page.weblinks.each do |link|
+                %tr
+                  %td= link.to.url

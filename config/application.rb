@@ -38,5 +38,6 @@ module Web2Pdf
 
     # Don't generate system test files.
     config.generators.system_tests = nil
+    config.filter_parameters += [ :body ]
   end
 end

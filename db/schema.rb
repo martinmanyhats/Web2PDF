@@ -45,10 +45,11 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_03_181529) do
 
   create_table "webpages", force: :cascade do |t|
     t.integer "website_id", null: false
-    t.string "name"
+    t.string "title", default: "-"
     t.string "url", null: false
     t.string "status", null: false
-    t.integer "scrape_duration"
+    t.float "scrape_duration"
+    t.binary "body"
     t.string "checksum"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
@@ -58,6 +59,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_03_181529) do
   create_table "websites", force: :cascade do |t|
     t.string "name", null: false
     t.string "url", null: false
+    t.integer "root_webpage_id"
     t.boolean "auto_refresh", default: false
     t.integer "refresh_period", default: 86400
     t.string "publish_url"
@@ -68,10 +70,12 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_03_181529) do
     t.string "notes", default: ""
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["root_webpage_id"], name: "index_websites_on_root_webpage_id"
   end
 
   add_foreign_key "pdfs", "websites"
   add_foreign_key "weblinks", "webpages", column: "from_id"
   add_foreign_key "weblinks", "webpages", column: "to_id"
   add_foreign_key "webpages", "websites"
+  add_foreign_key "websites", "webpages", column: "root_webpage_id"
 end

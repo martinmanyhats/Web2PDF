@@ -58,7 +58,11 @@ class WebsitesController < ApplicationController
   end
 
   def scrape
-    @website.scrape
+    @website.scrape(force: true)
+  end
+
+  def generate_pdf
+    @website.generate_pdf
   end
 
   private
