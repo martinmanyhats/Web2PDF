@@ -106,6 +106,8 @@ GEM
       raabro (~> 1.4)
     globalid (1.2.1)
       activesupport (>= 6.1)
+    grover (1.2.3)
+      nokogiri (~> 1)
     haml (6.3.0)
       temple (>= 0.8.2)
       thor
@@ -360,10 +362,6 @@ GEM
       base64
       websocket-extensions (>= 0.1.0)
     websocket-extensions (0.1.5)
-    wicked_pdf (2.8.2)
-      activesupport
-      ostruct
-    wkhtmltopdf-binary (0.12.6.9)
     zeitwerk (2.7.3)
 
 PLATFORMS
@@ -382,6 +380,7 @@ DEPENDENCIES
   bootsnap
   brakeman
   debug
+  grover
   haml-rails (~> 2.0)
   html2haml
   httparty
@@ -402,8 +401,6 @@ DEPENDENCIES
   turbo-rails
   tzinfo-data
   web-console
-  wicked_pdf
-  wkhtmltopdf-binary
 
 BUNDLED WITH
    2.6.2

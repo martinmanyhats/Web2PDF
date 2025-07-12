@@ -11,19 +11,20 @@ class Webpage < ApplicationRecord
 
     self.scrape_duration = (Time.now - start_at).seconds
     # TODO: encoding?
-    self.body = body
     document = Nokogiri::HTML(body)
+
+    # Remove main menu, trims.
+    document.css("#menu-wrapper")&.first.remove
+    document.css("#left-trim")&.first.remove
+    document.css("#right-trim")&.first.remove
+
     File.open("tmp/body.html", "wb") do |file|
       file.write(document.to_html)
       file.close
     end
+
     page_title = document.css("#page-title")&.first.text
     self.title = page_title.blank? ? "--" : page_title
-
-    # Remove main menu.
-    p "!!! main_menu1 #{document.css("#main-wrapper").inspect}"
-    document.css("#menu-wrapper")&.first.remove
-    p "!!! main_menu2 #{document.css("#main-wrapper").inspect}"
 
     # Find and record links to other pages on this website.
     website_host = URI(website.url).host
@@ -34,7 +35,6 @@ class Webpage < ApplicationRecord
       next if uri.path.blank?
       host = uri.host
       next if host.present? && host != website_host
-      #file_suffix = uri.path.match(/\.(\w+\z)/)[1]
       file_suffix = File.extname(uri.path)
       next if file_suffix.present? && file_suffix != ".html"
       linkurl = uri.to_s
@@ -55,49 +55,86 @@ class Webpage < ApplicationRecord
       end
     end
     self.status = "scraped"
+    self.body = document.to_html
     p "!!! Webpage::scraped #{inspect} body #{self.body.truncate(40)}"
     save!
     "new"
   end
 
   def generate_pdf
-    p "!!! Webpage::generate_pdf #{inspect}"
+    p "============================ Webpage::generate_pdf #{inspect}"
     document = Nokogiri::HTML(body)
-    document.css("a").map.each do |link|
-      p "!!! link1 #{link.inspect}"
-      p "!!! link4 #{link["href"].inspect}"
-      dest_url = canonicalise(link["href"])
-      p "!!! dest_url #{dest_url.inspect}"
-      dest_page = Webpage.find_sole_by(url: dest_url)
-      if website.url_internal?(dest_url)
-        link["href"] = "#_internal-page-#{dest_page.id}"
-        # TODO anchors
-      end
-    end
-    document.css("script").map do |script|
-      if script.attribute("src").value.include?("dol-cookie-control.js")
-        script.replace("<!- dol-cookie-control.js ->")
-      end
-    end
-    p "!!! document.css(body) #{document.css("body").inspect}"
-    p document.css("div#footer-wrapper").to_s
-    p body.truncate(200)
-    document.css("body")[0]["id"] = "_internal-page-#{id}"
-    document.css("body")[0].add_child(timestamp_html)
-    File.open("tmp/w.html", "wb") do |file|
+    process_scripts(document)
+    process_links(document)
+    process_images(document)
+    File.open("tmp/generate.html", "wb") do |file|
       file.write(document.to_html)
       file.close
     end
-    pdf = WickedPdf.new.pdf_from_string(document.to_html)
-    File.open("tmp/w.pdf", "wb") do |file|
+    document.css("body")[0]["id"] = "_internal-page-#{id}"
+    document.css("body")[0].add_child(timestamp_html)
+    File.open("tmp/page-#{"%04d" % id}.html", "wb") do |file|
+      file.write(document.to_html)
+      file.close
+    end
+    # pdf = WickedPdf.new.pdf_from_string(document.to_html)
+    pdf = Grover.new(document.to_html, format: "A4").to_pdf
+    pdf_filename = "tmp/page-#{"%04d" % id}.pdf"
+    File.open(pdf_filename, "wb") do |file|
       file.write(pdf)
       file.close
     end
+    pdf_filename
   end
 
   private
 
-  def canonicalise(uri)
+  def process_scripts(document)
+    document.css("script").map do |script|
+      if script.attribute("src")&.value&.include?("dol-cookie-control.js")
+        script.replace("<!- dol-cookie-control.js ->")
+      end
+    end
+  end
+
+  def process_links(document)
+    document.css("a").map.each do |link|
+      dest_url = canonicalise(link["href"]).to_s
+      p "!!! dest_url #{dest_url.inspect}"
+      dest_page = Webpage.where(url: dest_url)&.first
+      if dest_page && website.url_internal?(dest_url)
+        link["href"] = "#_internal-page-#{dest_page.id}"
+        p "!!! internally linking #{dest_page.url} to #{link["href"]}"
+        # TODO anchors
+      end
+    end
+  end
+
+  def process_images(document)
+    document.css("img").map.each do |image|
+      p "!!! image #{image["src"]}"
+      url = image["src"]
+      case File.extname(url)
+      when ".jpg"
+        p "!!! JPG"
+      when ".png"
+        p "!!! PNG"
+      else
+        p "!!! unknown image type"
+      end
+    end
+  end
+
+  def process_pdfs(document)
+    document.css("a").map.each do |image|
+      if File.extname(image.attributes["href"].value) == ".pdf"
+        p "!!! PDF #{image.attributes["href"].value}"
+      end
+    end
+  end
+
+  def canonicalise(string_or_uri)
+    uri = string_or_uri.kind_of?(URI) ? string_or_uri : URI.parse(string_or_uri.strip)
     return uri if uri.opaque
     if uri.host.blank?
       uri.host = URI(website.url).host.to_s
@@ -127,7 +164,7 @@ class Webpage < ApplicationRecord
   end
 
   def timestamp_html
-    "<div style='font-size:60%;color:#444'>Captured #{Time.now}</div>"
+    "<div style='font-size:60%;color:#444'>Captured #{Time.now} #{id}</div>"
   end
 
   def get_body(url)

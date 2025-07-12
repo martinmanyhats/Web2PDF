@@ -1,5 +1,5 @@
 class WebsitesController < ApplicationController
-  before_action :set_website, only: %i[ show edit update destroy scrape ]
+  before_action :set_website, only: %i[ show edit update destroy scrape generate ]
 
   # GET /websites or /websites.json
   def index
@@ -61,8 +61,8 @@ class WebsitesController < ApplicationController
     @website.scrape(force: true)
   end
 
-  def generate_pdf
-    @website.generate_pdf
+  def generate
+    @website.generate
   end
 
   private
