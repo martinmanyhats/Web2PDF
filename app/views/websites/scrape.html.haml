@@ -2,7 +2,7 @@
 
 %table
   %tbody
-    - @website.webpages.order(:url).each do |page|
+    - @website.webpages.order(:title, :url).each do |page|
       - pp page
       %tr
         %td<= page.title

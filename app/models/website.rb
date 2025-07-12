@@ -17,7 +17,7 @@ class Website < ApplicationRecord
       break if unscraped_webpages.empty?
       unscraped_webpages.each do |page|
         page_count += 1
-        return if page_count > 10
+        return if page_count > 2
         page.scrape(force: force)
       end
     end

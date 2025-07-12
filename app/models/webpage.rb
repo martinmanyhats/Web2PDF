@@ -7,7 +7,7 @@ class Webpage < ApplicationRecord
     start_at = Time.now
     body = get_body(url)
     new_checksum = Digest::SHA256.hexdigest(body)
-    return if new_checksum == @checksum && !force
+    return "existing" if new_checksum == @checksum && !force
 
     self.scrape_duration = (Time.now - start_at).seconds
     # TODO: encoding?
@@ -17,23 +17,27 @@ class Webpage < ApplicationRecord
       file.write(document.to_html)
       file.close
     end
-    page_title = document.css("#page-title").first.text
-    self.title = page_title unless page_title.blank?
+    page_title = document.css("#page-title")&.first.text
+    self.title = page_title.blank? ? "--" : page_title
 
     # Remove main menu.
     p "!!! main_menu1 #{document.css("#main-wrapper").inspect}"
     document.css("#menu-wrapper")&.first.remove
     p "!!! main_menu2 #{document.css("#main-wrapper").inspect}"
 
-    # Find and record links.
+    # Find and record links to other pages on this website.
     website_host = URI(website.url).host
     extract_links(document).each do |link|
-      uri = link.to_s.strip
-      p "!!! host #{URI(uri).host} link #{uri}"
-      next if link == "/" || uri.starts_with?("mailto:")
-      host = URI(uri).host
+      p "!!! link #{link}"
+      uri = canonicalise(URI(link))
+      next unless uri.scheme == "http" || uri.scheme == "https"
+      next if uri.path.blank?
+      host = uri.host
       next if host.present? && host != website_host
-      linkurl = canonicalise(link.value)
+      #file_suffix = uri.path.match(/\.(\w+\z)/)[1]
+      file_suffix = File.extname(uri.path)
+      next if file_suffix.present? && file_suffix != ".html"
+      linkurl = uri.to_s
       p "!!! from #{url} to #{linkurl}"
       to_webpage = Webpage.find_or_initialize_by(url: linkurl) do |page|
         page.website = website
@@ -53,7 +57,7 @@ class Webpage < ApplicationRecord
     self.status = "scraped"
     p "!!! Webpage::scraped #{inspect} body #{self.body.truncate(40)}"
     save!
-    
+    "new"
   end
 
   def generate_pdf
@@ -93,20 +97,33 @@ class Webpage < ApplicationRecord
 
   private
 
-  def canonicalise(url)
-    if url.starts_with?("/")
-      url = "#{website.url}#{url}"
+  def canonicalise(uri)
+    return uri if uri.opaque
+    if uri.host.blank?
+      uri.host = URI(website.url).host.to_s
     end
-    if url.ends_with?("/")
-      url = url.chop
+    if uri.host == URI(website.url).host
+      if uri.scheme == "http"
+        uri.scheme = "https"
+      end
+      if uri.path&.ends_with?("/")
+        uri.path = uri.path.chop
+      end
     end
-    url
+    if uri.scheme.blank?
+      uri.scheme = "https"
+    end
+    if uri.host.blank?
+      uri.host = URI(website.url).host
+    end
+    p "!!! canonicalise uri #{uri.to_s}"
+    uri
   end
 
   def extract_links(document)
     p "!!! extract_links size #{document.css("a").size}"
     p "!!! extract_links #{document.css("a").map { |a| a.attribute("href") }}"
-    document.css("a").map { |a| a.attribute("href") }
+    document.css("a").map { |a| a.attribute("href").to_s.strip }
   end
 
   def timestamp_html
