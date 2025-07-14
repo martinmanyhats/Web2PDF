@@ -43,6 +43,7 @@ gem "thruster", require: false
 gem "haml-rails", "~> 2.0"
 gem "html2haml"
 gem "httparty"
+gem "addressable" # URI cannot cope with non-ASCII
 gem "nokogiri"
 gem "ferrum_pdf"
 gem "grover"

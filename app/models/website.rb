@@ -14,11 +14,12 @@ class Website < ApplicationRecord
     page_count = 0
     loop do
       unscraped_webpages = Webpage.where(status: "unscraped")
+      p "!!! Website::scrape count #{unscraped_webpages.count}"
       break if unscraped_webpages.empty?
       unscraped_webpages.each do |page|
         page.scrape(force: force)
         page_count += 1
-        return if page_count > 4
+        return if page_count > 50
       end
     end
   end
@@ -37,6 +38,7 @@ class Website < ApplicationRecord
         format: :A4,
       )
       file.close
+      browser.reset
       browser.quit
     end
   end

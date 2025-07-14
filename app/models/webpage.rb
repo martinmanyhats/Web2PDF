@@ -18,16 +18,17 @@ class Webpage < ApplicationRecord
     # TODO: encoding?
     document = Nokogiri::HTML(body)
 
-    page_title = document.css("#page-title")&.first.text
+    page_title = document.css("#page-title")&.first&.text
     self.title = page_title.blank? ? "--" : page_title
     self.canonical_url = document.css("link[rel=canonical]").first["href"]
     self.content = document.css("#main-content-wrapper").to_html
 
-    # Find other pages on this website and record links.
-    website_host = URI(website.url).host
+    # Find other pages on this website.
+    website_host = Addressable::URI.parse(website.url).host
     extract_links(document).each do |link|
       p "!!! link #{link}"
-      uri = canonicalise(URI(link))
+      next if link == "http://"  # HACK for DH content error.
+      uri = canonicalise(Addressable::URI.parse(link))
       next unless uri.scheme == "http" || uri.scheme == "https"
       next if uri.path.blank?
       host = uri.host
@@ -43,21 +44,11 @@ class Webpage < ApplicationRecord
         page.save!
       end
       p "!!! to_webpage #{to_webpage.inspect}"
-=begin
-      Weblink.find_or_initialize_by(from: self, to: to_webpage) do |link|
-        link.from = self
-        link.to = to_webpage
-        link.linktype = "a"
-        link.linkvalue = linkurl
-        link.save!
-        p "!!! new link: #{link.inspect}"
-      end
-=end
     end
     self.status = "scraped"
     p "!!! Webpage::scraped #{inspect} content #{content.truncate(40)}"
     save!
-    "new"
+    self
   end
 
   def generate_html(stream)
@@ -67,37 +58,6 @@ class Webpage < ApplicationRecord
     process_links(body)
     process_images(body)
     stream.write(body)
-  end
-
-  def XXgenerate_pdf
-    p "============================ Webpage::generate_pdf #{inspect}"
-    body = Nokogiri::HTML("<body>#{content}</body>")
-    # XXprocess_scripts(document)
-    process_links(body)
-    process_images(body)
-    File.open("tmp/generate.html", "wb") do |file|
-      file.write(body.to_html)
-      file.close
-    end
-    body.css("body")[0]["id"] = "_internal-page-#{"%04d" % id}"
-    body.css("body")[0].add_child(timestamp_html)
-    File.open("tmp/page-#{"%04d" % id}.html", "wb") do |file|
-      file.write(body.to_html)
-      file.close
-    end
-    pdf = FerrumPdf.render_pdf(html: body.to_html,
-                               pdf_options: {
-                                 landscape: true,
-                                 format: :A4,
-                               } )
-    # pdf = Grover.new(body.to_html, format: "A4").to_pdf
-    # pdf = WickedPdf.new.pdf_from_string(body.to_html)
-    pdf_filename = "tmp/page-#{"%04d" % id}.pdf"
-    File.open(pdf_filename, "wb") do |file|
-      file.write(pdf)
-      file.close
-    end
-    pdf_filename
   end
 
   private
@@ -149,12 +109,14 @@ class Webpage < ApplicationRecord
   end
 
   def canonicalise(string_or_uri)
-    uri = string_or_uri.kind_of?(URI) ? string_or_uri : URI.parse(string_or_uri.strip)
-    return uri if uri.opaque
+    uri = string_or_uri.kind_of?(Addressable::URI) ? string_or_uri : Addressable::URI.parse(string_or_uri.strip)
+    p "!!! canonicalise #{uri.inspect}"
+    return uri if uri.scheme == "mailto"
+    website_host = Addressable::URI.parse(website.url).host
     if uri.host.blank?
-      uri.host = URI(website.url).host.to_s
+      uri.host = website_host
     end
-    if uri.host == URI(website.url).host
+    if uri.host == website_host
       if uri.scheme == "http"
         uri.scheme = "https"
       end
@@ -164,9 +126,6 @@ class Webpage < ApplicationRecord
     end
     if uri.scheme.blank?
       uri.scheme = "https"
-    end
-    if uri.host.blank?
-      uri.host = URI(website.url).host
     end
     p "!!! canonicalise uri #{uri.to_s}"
     uri
