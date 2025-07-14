@@ -9,9 +9,3 @@
         %td<= page.url
         %td<= page.status
         %td<= page.scrape_duration&.round(2)
-        %td
-          %table
-            %tbody
-              - page.weblinks.each do |link|
-                %tr
-                  %td= link.to.url

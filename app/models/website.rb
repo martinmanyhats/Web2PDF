@@ -19,24 +19,32 @@ class Website < ApplicationRecord
       unscraped_webpages.each do |page|
         page.scrape(force: force)
         page_count += 1
-        return if page_count > 50
+        return if page_count > 15
       end
     end
   end
 
-  def generate
-    p "!!! Website::generate"
+  def generate_pdf
+    p "!!! Website::generate_pdf"
     File.open("/tmp/dh.html", "wb") do |file|
+      head = File.read(File.join(Rails.root, 'config', 'website_head.html'))
+      p "!!! head #{head.inspect}"
+      file.write("<html>\n#{head}\n<body>\n")
       webpages.reject { |page| page.status != "scraped"}.
         each { |page| page.generate_html(file) }
-      browser = Ferrum::Browser.new
+      browser = Ferrum::Browser.new(
+        browser_options: {
+          "generate-pdf-document-outline": true
+        }
+      )
       page = browser.create_page
       page.go_to("file:///tmp/dh.html")
       page.pdf(
         path: "/tmp/dh.pdf",
         landscape: true,
-        format: :A4,
+        format: :A4
       )
+      file.write("<body>\n<html>\n")
       file.close
       browser.reset
       browser.quit

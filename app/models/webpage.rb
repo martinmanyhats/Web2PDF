@@ -6,6 +6,11 @@ class Webpage < ApplicationRecord
     p "!!! Webpage::scrape url #{url}"
     start_at = Time.now
     body = get_body(url)
+    self.scrape_duration = (Time.now - start_at).seconds
+
+    # TODO: encoding?
+    document = Nokogiri::HTML(body)
+
     new_checksum = Digest::SHA256.hexdigest(body)
     return "existing" if new_checksum == @checksum && !force
 
@@ -14,12 +19,23 @@ class Webpage < ApplicationRecord
       file.close
     end
 
-    self.scrape_duration = (Time.now - start_at).seconds
-    # TODO: encoding?
-    document = Nokogiri::HTML(body)
+    if assetid = document.css("meta[name='squiz-assetid']")&.first
+      self.squiz_assetid = assetid.attribute("content").value
+      self.squiz_short_name = document.css("meta[name='squiz-short_name']").first.attribute("content").value
+      self.squiz_updated = DateTime.iso8601(document.css("meta[name='squiz-updated_iso8601']").first.attribute("content").value)
+      self.squiz_breadcrumbs = document.css("#breadcrumbs")&.first&.inner_html
+      p "====== squiz_assetid #{squiz_assetid} squiz_short_name #{squiz_short_name} squiz_updated #{squiz_updated}"
+    else
 
-    page_title = document.css("#page-title")&.first&.text
-    self.title = page_title.blank? ? "--" : page_title
+    end
+
+    if squiz_short_name.blank?
+      page_title = document.css("#page-title")&.first&.text
+      self.title = page_title.blank? ? "--" : page_title
+    else
+      self.title = squiz_short_name
+    end
+
     self.canonical_url = document.css("link[rel=canonical]").first["href"]
     self.content = document.css("#main-content-wrapper").to_html
 
@@ -53,8 +69,12 @@ class Webpage < ApplicationRecord
 
   def generate_html(stream)
     p "!!! Webpage::generate_html id #{id}"
-    raise "Webpage::generate_html not scraped" if status != "scraped"
-    body = Nokogiri::HTML("<div id='_internal-page-#{"%04d" % id}'><div>PAGE #{id} #{title}</div>#{content}#{timestamp_html}</div>")
+    raise "Webpage::generate_html not scraped id #{id}" if status != "scraped"
+    html_title = "<span class='webpage-title'>#{title}</span>"
+    html_breadcrumbs = "<span class='webpage-breadcrumbs'>#{breadcrumbs_html}</span>"
+    html = "<div class='webpage-header'>#{html_title}#{html_breadcrumbs}</div>#{content}#{timestamp_html}"
+    html = "<div id='webpage-page-#{"%04d" % id}'>#{html}</div>"
+    body = Nokogiri::HTML(html)
     process_links(body)
     process_images(body)
     stream.write(body)
@@ -72,11 +92,14 @@ class Webpage < ApplicationRecord
 
   def process_links(document)
     document.css("a").map.each do |link|
+      next if link["href"].blank?
+      p "LINK #{link}"
+      next if link["href"] == "http://"  # HACK for DH content error.
       dest_url = canonicalise(link["href"]).to_s
       p "!!! dest_url #{dest_url.inspect}"
       dest_page = Webpage.where(url: dest_url)&.first
       if dest_page && website.url_internal?(dest_url)
-        link["href"] = "#_internal-page-#{"%04d" % dest_page.id}"
+        link["href"] = "#webpage-page-#{"%04d" % dest_page.id}"
         p "!!! internally linking #{dest_page.url} to #{link["href"]}"
         # TODO anchors
       end
@@ -109,8 +132,8 @@ class Webpage < ApplicationRecord
   end
 
   def canonicalise(string_or_uri)
+    p "!!! canonicalise #{string_or_uri.inspect}"
     uri = string_or_uri.kind_of?(Addressable::URI) ? string_or_uri : Addressable::URI.parse(string_or_uri.strip)
-    p "!!! canonicalise #{uri.inspect}"
     return uri if uri.scheme == "mailto"
     website_host = Addressable::URI.parse(website.url).host
     if uri.host.blank?
@@ -138,7 +161,17 @@ class Webpage < ApplicationRecord
   end
 
   def timestamp_html
-    "<div style='font-size:60%;color:#444'>Captured #{Time.now} #{id}</div>"
+    asset_link = "<a href='#{website.url}?a=#{squiz_assetid}'>#{squiz_assetid}</a>"
+    "<div class='webpage-timestamp'>Last updated #{self.squiz_updated}, asset #{asset_link}</div>"
+  end
+
+  def breadcrumbs_html
+    p "!!! breadcrumbs_html #{squiz_breadcrumbs}"
+    crumbs = Nokogiri::HTML(squiz_breadcrumbs).css("a").map do |crumb|
+      p "!!! CRUMB #{crumb["href"]}-#{crumb.text.strip}"
+      "<span class='webpage-breadcrumb'><a href='#{crumb["href"]}'>#{crumb.text.strip}</a></span>"
+    end
+    crumbs.join("\n")
   end
 
   def get_body(url)

@@ -62,7 +62,7 @@ class WebsitesController < ApplicationController
   end
 
   def generate
-    @website.generate
+    @website.generate_pdf
   end
 
   private

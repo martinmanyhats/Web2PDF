@@ -1,0 +1,607 @@
+<head>
+    <style media="all">
+        body {
+            font-family: "trebuchet ms", verdana, arial, tahoma;
+            font-size: 100%;
+            color: #222;
+            background-color: white;
+            line-height: 135%;
+            margin: 0px;
+            padding: 0px;
+        }
+
+        h2 {
+            font-size: 120%;
+            margin-bottom: 4px;
+        }
+
+        h3 {
+            font-size: 110%;
+            margin-bottom: 2px;
+        }
+
+        h4, h5 {
+            font-size: 100%;
+            margin-bottom: 0px;
+        }
+
+        p {
+            margin-top: 2px;
+            margin-bottom: 6px;
+        }
+
+        ul {
+            margin-top: 2px;
+            margin-bottom: 2px;
+        }
+
+        a:link {
+            color: #0086B2;
+            text-decoration: none;
+        }
+        a:visited {
+            color: #0086B2;
+            text-decoration: none;
+        }
+        a:hover {
+            color: #00A6DC;
+            text-decoration: none;
+            border-bottom: 1px dotted #0086B2;
+        }
+
+        a.nohover {
+            text-decoration: none;
+            border-bottom: none;
+        }
+
+        a:hover img {
+            text-decoration: none;
+            border-bottom: none;
+        }
+
+        img.pad-top {
+            padding-top: 6px;
+        }
+
+        img.pad-bottom {
+            padding-bottom: 6px;
+        }
+
+        img.pad-left {
+            padding-left: 8px;
+        }
+
+        img.pad-right {
+            padding-right: 8px;
+        }
+
+        .captioned-picture-left {
+            float: left;
+            margin-left: 8px;
+        }
+
+        .captioned-picture-right {
+            float: right;
+            margin-left: 8px;
+        }
+
+        .captioned-picture-left img, .captioned-picture-right img {
+            left: auto;
+            right: 0px;
+        }
+
+        .picture-caption {
+            text-align: center;
+            font-style: italic;
+            font-size: 85%;
+        }
+
+        .smaller {
+            font-size: 85%;
+        }
+
+        .larger {
+            font-size: 110%;
+        }
+
+        .poi {
+            font-family: Times;
+            font-style: italic;
+        }
+
+        #left-trim {
+            float: left;
+            width: 5%;
+            margin: 0px auto;
+            /*background: transparent url('trim.png') top left repeat-x;*/
+        }
+
+        #left-trim-edge {
+            float: right;
+            width: 13px;
+            height: 400px;
+            right: 0px;
+            /*background: transparent url('trim-left.png') top left no-repeat;*/
+        }
+
+        #right-trim {
+            float: left;
+            background-color: blue;
+            width: 5%;
+            height: 400px;
+            /*background: transparent url('trim.png') top left repeat-x;*/
+        }
+
+        #right-trim-edge {
+            float: left;
+            width: 13px;
+            height: 400px;
+            /*background: transparent url('trim-right.png') top left no-repeat;*/
+        }
+
+        #body-wrapper {
+            float: left;
+            width: 90%;
+            margin: 0px auto;
+            text-align: left;
+        }
+
+        #header-wrapper {
+            height: 130px;
+            /*background: #EDE5D3 url('menupics.jpg') top right no-repeat;*/
+        }
+
+        #header-logo {
+            float: right;
+        }
+
+        #menu-wrapper {
+            height: 34px;
+            overflow: hidden; /* no idea why this works, but it fixes a FF problem */
+        }
+
+        #menu-wrapper ul {
+            margin: 0px 0px 0px 2px;
+            padding: 8px 0px 0px 0px;
+            list-style: none;
+            font-size: 75%;
+            float: left;
+        }
+
+        #menu-wrapper li {
+            display: inline;
+            float: left;
+        }
+
+        #menu-wrapper a:hover {
+            background-position: 0% -42px;
+        }
+
+        #menu-wrapper a:hover span {
+            background-position: 100% -42px;
+        }
+
+        #menu-wrapper a {
+            float: left;
+            /*background: url('menuleft.png') no-repeat left top;*/
+            margin:0;
+            padding:0 0 0 4px;
+            text-decoration: none;
+            line-height: 1.5em;
+        }
+
+        #menu-wrapper a span {
+            /*background: transparent url('menuright.png') no-repeat right top;*/
+            padding: 5px 15px 4px 6px;
+            color: #5b8fbe;
+            display: block;
+            float: left;
+            cursor: pointer; /* IE doesnt display the hand when you roll over the link for some reason. This fixes it */
+        }
+
+        #site-title {
+            height: 24px;
+            padding: 20px 15px 6px 10px;
+            font-size: 140%;
+            color: #0086B2;
+        }
+
+        #site-title a {
+            text-decoration: none;
+            color: #0086B2;
+            border-bottom: 2px solid #FFBE62;
+        }
+
+        #site-title a:hover {
+            color: #00A6DC;
+            border-bottom: 2px dotted #FFBE62;
+        }
+
+        #page-title {
+            float: left;
+            height: 34px;
+            padding: 50px 15px 10px 10px;
+            margin: 0px;
+            font-size: 160%;
+            font-weight: bold;
+            color:#0086B2;
+        }
+
+        #breadcrumbs {
+            float: right;
+            height: 34px;
+            padding: 54px 10px 0px 0px;
+            font-size: 90%;
+        }
+
+        #main-content-wrapper {
+            clear: both;
+            text-align: left;
+            margin: 10px 6px 10px 10px;
+        }
+
+        #main-content {
+            padding: 5px 0px 5px 0px;
+        }
+
+        #section-menu-wrapper {
+            float: right;
+            width: 180px;
+            margin: 20px 0px 20px 12px;
+            /*background: transparent url('menu.png') no-repeat;*/
+            text-align: center;
+            line-height: 140%;
+        }
+
+        #section-menu-title {
+            font-size: 75%;
+            text-transform: uppercase;
+            margin: 1em 0 0.3em 0;
+            color: #5b8fbe;
+            font-weight: normal;
+            letter-spacing: 0.15em;
+        }
+
+        #section-menu-wrapper ul {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            font-size: 90%;
+        }
+
+        #section-menu-wrapper a:link, #section-menu-wrapper a:visited {
+            text-decoration: none;
+        }
+
+        #home-top-box {
+            width:100%;
+            line-height: 160%;
+            margin: 0px 0px 10px 0px;
+        }
+
+        .home-box {
+            margin: 18px 0px 0px 0px;
+            padding: 0px 0px 4px 0px;
+            font-size: 100%;
+            /*border-style: solid none none none;
+            border-color: #FFBE62;
+            border-width: 1px;*/
+        }
+
+        .home-box ul {
+            margin: 2px 0px 0xp 0px;
+        }
+
+        table.forum-recentposts {
+            border: none;
+            font-size: 85%;
+        }
+
+        td.forum-subject {
+            padding-right: 14px;
+        }
+
+        #footer-wrapper {
+            width: 90%;
+            margin: 0px auto;
+            clear: both;
+            font-size: 80%;
+            color: #444;
+        }
+
+        #footer-wrapper a {
+            color: #444;
+        }
+
+        #footer-left {
+            float: left;
+            width: 48%;
+        }
+
+        #footer-right{
+            float: right;
+            width: 48%;
+            margin-right: 10px;
+            text-align: right;
+        }
+
+        .builtby {
+            color: #FFBE62;
+        }
+
+        .builtby a {
+            color: #FFBE62 !important;
+        }
+
+        .asset-listing {
+            margin-top: 6px;
+            margin-left: 0px;
+            padding-left: 10px;
+            list-style-type: none;
+        }
+
+        .asset-listing a, .asset-listing a:visited {
+            text-decoration: none;
+        }
+
+        .asset-listing li {
+            padding-top: 8px;
+            padding-left: 14px;
+        }
+
+        .archivenote {
+            margin-left: 20px;
+            margin-right: 20px;
+            margin-bottom: 14px;
+            padding: 4px 6px 4px 6px;
+            border: 1px solid #FFBE62;
+        }
+
+        table.club-page-list {
+            width: 100%;
+            margin-top: 8px;
+            border: 1px dotted gray;
+        }
+
+        .club-page-list td {
+            padding: 4px 6px 4px 6px;
+        }
+
+        table.club-asset {
+            width: 100%;
+            margin: 6px 0px 0px 0px;
+            border: 1px dotted gray;
+        }
+
+        .club-asset td {
+            vertical-align: top;
+            padding: 2px;
+        }
+
+        .asset-list-wrapper {
+            text-align: right;
+            font-size: 75%;
+        }
+
+        .asset-list-wrapper img {
+            display: none;
+        }
+
+        table.doldex-toc {
+            width: 100%;
+            margin-top: 12px;
+            font-size: 85%;
+        }
+
+        table.doldex-toc tr {
+            vertical-align: top;
+        }
+
+        table.doldex-toc td {
+            padding: 2px 10px 2px 2px;
+        }
+
+        .doldex-entry {
+            width: 500px;
+            margin-top: 12px;
+        }
+
+        .doldex-entry td {
+            padding: 2px 2px 2px 2px;
+        }
+
+        .doldex-inlinetoc {
+            margin-bottom: 12px;
+        }
+
+        td.doldex-label {
+            padding-left: 12px;
+            width: 10%;
+            color: #aaa;
+        }
+
+        td.doldex-value-name {
+            padding-left: 8px;
+            font-size: 110%;
+            background-color: #EDE5D3;
+        }
+
+        .doldex-value {
+        }
+
+        .doldex-last-updated {
+            font-size: 80%;
+            color: #aaa;
+        }
+
+        .doldex-toc a, .doldex-toc a:visited, .doldex-inlinetoc a, .doldex-inlinetoc a:visited, .doldex-value a, .doldex-value a:visited {
+            text-decoration: none;
+        }
+
+        table.dol-contents {
+            width: 100%;
+            font-size: 85%;
+        }
+
+        table.dol-contents tr {
+            vertical-align: top;
+        }
+
+        table.dol-contents div {
+            padding-left: 12px;
+        }
+
+        .dol-contents-firstletter {
+            padding-top: 4px;
+            margin-top: 8px;
+        }
+
+        table.report td {
+            padding-right: 15px;
+        }
+
+        ul.leaders {
+            max-width: 40em;
+            padding: 0;
+            overflow-x: hidden;
+            list-style: none;
+        }
+        ul.leaders li::before {
+            float: left;
+            width: 0;
+            white-space: nowrap;
+            color: #ccc;
+            content:
+                    ". . . . . . . . . . . . . . . . . . . . "
+                    ". . . . . . . . . . . . . . . . . . . . "
+                    ". . . . . . . . . . . . . . . . . . . . "
+                    ". . . . . . . . . . . . . . . . . . . . ";
+        }
+        ul.leaders span:first-child {
+            padding-right: 0.33em;
+            background: white;
+        }
+        ul.leaders span + span {
+            float: right;
+            padding-left: 0.33em;
+            background: white;
+            font-size: 90%;
+        }
+
+        .book-toc-item {
+        }
+
+        .book-toc-title {
+            display: block-inline;
+            width: 400px;
+        }
+
+        .book-toc-title::after {
+            content: leader(dotted);
+        }
+
+        .book-toc-pagenumber {
+            text-align: right;
+        }
+
+        .book-toc-pagenumber::before{
+            content: "p.";
+        }
+
+        /* Google 404 enhancements */
+        #goog-wm { }
+        #goog-wm h3.closest-match { }
+        #goog-wm h3.closest-match a { }
+        #goog-wm h3.other-things { }
+        #goog-wm ul li { }
+        #goog-wm li.search-goog { display: block; }
+
+        #slides-box {
+            float: right;
+            height: 225px;
+            width: 300px;
+            padding-left: 12px;
+            padding-bottom: 4px;
+        }
+        #slides {
+            display: none;
+        }
+
+        .dhlogo {
+            display: block;
+            font-family: Trebuchet, Verdana, Arial, Helvetica, sans-serif;
+            text-align: center;
+            line-height: 90%;
+            color: black;
+            border: 2px solid #888;
+            padding: 4px 6px;
+        }
+
+        .dhlogo > span:first-child {
+            display: inline-block;
+            color: #0086b2;
+            transform: scale(1.2, 1);
+            padding-top: 0.3em;
+            padding-right: 0.2em;
+            padding-bottom: 0.3em;
+            font-size: 3.5em;
+            font-weight: bold;
+            letter-spacing: -0.2em;
+        }
+
+        .dhlogo > span:nth-child(2) {
+            display: block;
+            font-size: 0.85em;
+        }
+
+        .asset-listing li, .dol-contents-firstletter {
+            -webkit-print-color-adjust: exact;
+            background: transparent url('https://www.deddingtonhistory.uk/__data/assets/image/0014/752/assetmark.gif?v=0.0.8') top left no-repeat;
+        }
+        h2 {
+            -webkit-print-color-adjust: exact;
+            background-color: transparent;
+            background-image: url('https://www.deddingtonhistory.uk/__data/assets/image/0016/3247/h2mark.gif?v=0.0.2');
+            background-repeat: no-repeat;
+            background-position: -4px 0px;
+            margin-left: -8px;
+            padding-left: 12px;
+            margin-top: 10px;
+            padding-top: 10px;
+        }
+
+        .webpage-header {
+            -webkit-print-color-adjust: exact;
+            break-before: page;
+            margin-bottom: 8px;
+            padding: 12px 0px 12px 8px;
+            background-color: #ede5d3;
+        }
+        .webpage-title {
+            color: #0086B2;
+            font-width: bold;
+            font-size: 140%;
+        }
+        .webpage-breadcrumbs {
+            display: inline-block;
+            float: right;
+            margin-right: 12px;
+            color: #0086B2;
+            font-size: 110%;
+        }
+        .webpage-breadcrumb a {
+            color: #0086B2;
+            text-decoration: none;
+        }
+        .webpage-timestamp {
+            text-align: right;
+            margin-top:20px;
+            font-size:60%;
+            color:#444;
+        }
+        .webpage-timestamp a {
+            color:#444;
+            text-decoration: none;
+        }
+    </style>
+</head>

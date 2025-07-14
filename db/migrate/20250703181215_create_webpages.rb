@@ -9,6 +9,10 @@ class CreateWebpages < ActiveRecord::Migration[8.0]
       t.float :scrape_duration
       t.binary :content
       t.string :checksum
+      t.string :squiz_assetid
+      t.string :squiz_short_name
+      t.datetime :squiz_updated
+      t.string :squiz_breadcrumbs
 
       t.timestamps
     end
