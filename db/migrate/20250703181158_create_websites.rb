@@ -9,8 +9,8 @@ class CreateWebsites < ActiveRecord::Migration[8.0]
       t.string :publish_url
       t.string :status, null: false, default: "unscraped"
       t.string :remove_scripts, default: ""
-      t.string :additional_css, default: ""
-      t.string :additional_js, default: ""
+      t.string :css, default: ""
+      t.string :javascript, default: ""
       t.string :notes, default: ""
 
       t.timestamps

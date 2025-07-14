@@ -47,9 +47,10 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_03_181529) do
     t.integer "website_id", null: false
     t.string "title", default: "-"
     t.string "url", null: false
+    t.string "canonical_url"
     t.string "status", null: false
     t.float "scrape_duration"
-    t.binary "body"
+    t.binary "content"
     t.string "checksum"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
@@ -65,8 +66,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_03_181529) do
     t.string "publish_url"
     t.string "status", default: "unscraped", null: false
     t.string "remove_scripts", default: ""
-    t.string "additional_css", default: ""
-    t.string "additional_js", default: ""
+    t.string "css", default: ""
+    t.string "javascript", default: ""
     t.string "notes", default: ""
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false

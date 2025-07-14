@@ -9,24 +9,21 @@ class Webpage < ApplicationRecord
     new_checksum = Digest::SHA256.hexdigest(body)
     return "existing" if new_checksum == @checksum && !force
 
+    File.open("tmp/body.html", "wb") do |file|
+      file.write(body)
+      file.close
+    end
+
     self.scrape_duration = (Time.now - start_at).seconds
     # TODO: encoding?
     document = Nokogiri::HTML(body)
 
-    # Remove main menu, trims.
-    document.css("#menu-wrapper")&.first.remove
-    document.css("#left-trim")&.first.remove
-    document.css("#right-trim")&.first.remove
-
-    File.open("tmp/body.html", "wb") do |file|
-      file.write(document.to_html)
-      file.close
-    end
-
     page_title = document.css("#page-title")&.first.text
     self.title = page_title.blank? ? "--" : page_title
+    self.canonical_url = document.css("link[rel=canonical]").first["href"]
+    self.content = document.css("#main-content-wrapper").to_html
 
-    # Find and record links to other pages on this website.
+    # Find other pages on this website and record links.
     website_host = URI(website.url).host
     extract_links(document).each do |link|
       p "!!! link #{link}"
@@ -34,7 +31,8 @@ class Webpage < ApplicationRecord
       next unless uri.scheme == "http" || uri.scheme == "https"
       next if uri.path.blank?
       host = uri.host
-      next if host.present? && host != website_host
+      next if uri.path.starts_with?("/mainmenu/")
+      next if host != website_host
       file_suffix = File.extname(uri.path)
       next if file_suffix.present? && file_suffix != ".html"
       linkurl = uri.to_s
@@ -45,7 +43,8 @@ class Webpage < ApplicationRecord
         page.save!
       end
       p "!!! to_webpage #{to_webpage.inspect}"
-      weblink = Weblink.find_or_initialize_by(from: self, to: to_webpage) do |link|
+=begin
+      Weblink.find_or_initialize_by(from: self, to: to_webpage) do |link|
         link.from = self
         link.to = to_webpage
         link.linktype = "a"
@@ -53,32 +52,46 @@ class Webpage < ApplicationRecord
         link.save!
         p "!!! new link: #{link.inspect}"
       end
+=end
     end
     self.status = "scraped"
-    self.body = document.to_html
-    p "!!! Webpage::scraped #{inspect} body #{self.body.truncate(40)}"
+    p "!!! Webpage::scraped #{inspect} content #{content.truncate(40)}"
     save!
     "new"
   end
 
-  def generate_pdf
+  def generate_html(stream)
+    p "!!! Webpage::generate_html id #{id}"
+    raise "Webpage::generate_html not scraped" if status != "scraped"
+    body = Nokogiri::HTML("<div id='_internal-page-#{"%04d" % id}'><div>PAGE #{id} #{title}</div>#{content}#{timestamp_html}</div>")
+    process_links(body)
+    process_images(body)
+    stream.write(body)
+  end
+
+  def XXgenerate_pdf
     p "============================ Webpage::generate_pdf #{inspect}"
-    document = Nokogiri::HTML(body)
-    process_scripts(document)
-    process_links(document)
-    process_images(document)
+    body = Nokogiri::HTML("<body>#{content}</body>")
+    # XXprocess_scripts(document)
+    process_links(body)
+    process_images(body)
     File.open("tmp/generate.html", "wb") do |file|
-      file.write(document.to_html)
+      file.write(body.to_html)
       file.close
     end
-    document.css("body")[0]["id"] = "_internal-page-#{id}"
-    document.css("body")[0].add_child(timestamp_html)
+    body.css("body")[0]["id"] = "_internal-page-#{"%04d" % id}"
+    body.css("body")[0].add_child(timestamp_html)
     File.open("tmp/page-#{"%04d" % id}.html", "wb") do |file|
-      file.write(document.to_html)
+      file.write(body.to_html)
       file.close
     end
-    # pdf = WickedPdf.new.pdf_from_string(document.to_html)
-    pdf = Grover.new(document.to_html, format: "A4").to_pdf
+    pdf = FerrumPdf.render_pdf(html: body.to_html,
+                               pdf_options: {
+                                 landscape: true,
+                                 format: :A4,
+                               } )
+    # pdf = Grover.new(body.to_html, format: "A4").to_pdf
+    # pdf = WickedPdf.new.pdf_from_string(body.to_html)
     pdf_filename = "tmp/page-#{"%04d" % id}.pdf"
     File.open(pdf_filename, "wb") do |file|
       file.write(pdf)
@@ -89,7 +102,7 @@ class Webpage < ApplicationRecord
 
   private
 
-  def process_scripts(document)
+  def XXprocess_scripts(document)
     document.css("script").map do |script|
       if script.attribute("src")&.value&.include?("dol-cookie-control.js")
         script.replace("<!- dol-cookie-control.js ->")
@@ -103,7 +116,7 @@ class Webpage < ApplicationRecord
       p "!!! dest_url #{dest_url.inspect}"
       dest_page = Webpage.where(url: dest_url)&.first
       if dest_page && website.url_internal?(dest_url)
-        link["href"] = "#_internal-page-#{dest_page.id}"
+        link["href"] = "#_internal-page-#{"%04d" % dest_page.id}"
         p "!!! internally linking #{dest_page.url} to #{link["href"]}"
         # TODO anchors
       end
@@ -114,11 +127,13 @@ class Webpage < ApplicationRecord
     document.css("img").map.each do |image|
       p "!!! image #{image["src"]}"
       url = image["src"]
-      case File.extname(url)
+      case File.extname(url).downcase
       when ".jpg"
         p "!!! JPG"
       when ".png"
         p "!!! PNG"
+      when ".gif"
+        p "!!! GIF"
       else
         p "!!! unknown image type"
       end

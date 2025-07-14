@@ -12,6 +12,5 @@ website = Website.create(name: "Deddington History",
                          url: "https://www.deddingtonhistory.uk",
                          status: "unscraped",
                          remove_scripts: "cookieControl",
-                         additional_css: "",
-                         additional_js: ""
+                         css: ""
 )

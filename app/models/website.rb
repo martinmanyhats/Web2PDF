@@ -11,19 +11,37 @@ class Website < ApplicationRecord
     self.root_webpage = webpage
     save!
     webpage.scrape(force: force)
-    page_count = 1
+    page_count = 0
     loop do
       unscraped_webpages = Webpage.where(status: "unscraped")
       break if unscraped_webpages.empty?
       unscraped_webpages.each do |page|
+        page.scrape(force: force)
         page_count += 1
         return if page_count > 4
-        page.scrape(force: force)
       end
     end
   end
 
-  def generate(format: "pdf")
+  def generate
+    p "!!! Website::generate"
+    File.open("/tmp/dh.html", "wb") do |file|
+      webpages.reject { |page| page.status != "scraped"}.
+        each { |page| page.generate_html(file) }
+      browser = Ferrum::Browser.new
+      page = browser.create_page
+      page.go_to("file:///tmp/dh.html")
+      page.pdf(
+        path: "/tmp/dh.pdf",
+        landscape: true,
+        format: :A4,
+      )
+      file.close
+      browser.quit
+    end
+  end
+
+  def generate2(format: "pdf")
     collate_pdfs("tmp/dh.pdf", generate_pdfs)
   end
 
