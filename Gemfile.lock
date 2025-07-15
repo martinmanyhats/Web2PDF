@@ -109,7 +109,7 @@ GEM
       concurrent-ruby (~> 1.1)
       webrick (~> 1.7)
       websocket-driver (~> 0.7)
-    ferrum_pdf (0.3.0)
+    ferrum_pdf (0.4.0)
       ferrum (~> 0.15)
       rails (>= 6.0.0)
     fugit (1.11.1)
@@ -272,7 +272,7 @@ GEM
       zeitwerk (~> 2.6)
     rainbow (3.1.1)
     rake (13.3.0)
-    rdoc (6.14.1)
+    rdoc (6.14.2)
       erb
       psych (>= 4.0.0)
     regexp_parser (2.10.0)
