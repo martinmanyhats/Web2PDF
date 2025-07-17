@@ -2,10 +2,10 @@
 
 %table
   %tbody
-    - @website.webpages.order(:title, :url).each do |page|
+    - @website.webpages.order(:page_path).each do |page|
       - pp page
       %tr
+        %td<= page.page_path
         %td<= page.title
         %td<= page.url
         %td<= page.status
-        %td<= page.scrape_duration&.round(2)

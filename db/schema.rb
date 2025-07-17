@@ -33,19 +33,22 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_03_181220) do
 
   create_table "webpages", force: :cascade do |t|
     t.integer "website_id", null: false
+    t.integer "parent_id"
     t.string "title", default: "-"
     t.string "url", null: false
-    t.string "canonical_url"
+    t.string "page_path", null: false
     t.string "status", null: false
     t.float "scrape_duration"
     t.binary "content"
     t.string "checksum"
+    t.string "squiz_canonical_url"
     t.string "squiz_assetid"
     t.string "squiz_short_name"
     t.datetime "squiz_updated"
     t.string "squiz_breadcrumbs"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["parent_id"], name: "index_webpages_on_parent_id"
     t.index ["website_id"], name: "index_webpages_on_website_id"
   end
 
@@ -67,6 +70,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_03_181220) do
   end
 
   add_foreign_key "pdfs", "websites"
+  add_foreign_key "webpages", "webpages", column: "parent_id"
   add_foreign_key "webpages", "websites"
   add_foreign_key "websites", "webpages", column: "root_webpage_id"
 end

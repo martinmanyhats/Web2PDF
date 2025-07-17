@@ -3,7 +3,7 @@ class CreateWebsites < ActiveRecord::Migration[8.0]
     create_table :websites do |t|
       t.string :name, null: false
       t.string :url, null: false
-      t.references :root_webpage, foreign_key: { to_table: :webpages}
+      t.references :root_webpage, null: true, foreign_key: { to_table: :webpages}
       t.boolean :auto_refresh, default: false
       t.integer :refresh_period, default: 60 * 60 * 24
       t.string :publish_url
