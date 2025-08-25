@@ -140,9 +140,11 @@ class Webpage < ApplicationRecord
         p "~~~~~~ skipping due to suffix uri.path #{uri.path}"
         next
       end
-      linkurl = uri.to_s
-      Webpage.find_or_initialize_by(url: linkurl) do |page|
-        p "!!! new page linkurl #{linkurl}"
+      # Distinguish pages by assetid as there may be multiple URLs for each.
+      assetid = get_squiz_assetid_for_uri(uri)
+      raise "Webpage:spider missing assetid #{uri}" unless assetid
+      Webpage.find_or_initialize_by(squiz_assetid: assetid) do |page|
+        p "!!!!!!!!!! new page assetid #{assetid} uri #{uri.to_s}"
         page.website = website
         page.parent = self
         page.page_path = "#{parent.page_path}.#{"%04d" % id}"
@@ -217,8 +219,28 @@ class Webpage < ApplicationRecord
     uri
   end
 
-  def extract_links(document)
-    document.css("a").map { |a| a.attribute("href").to_s.strip }
+  def extract_links
+    document(url).css("a").map { |a| a.attribute("href").to_s.strip }
+  end
+
+  def get_squiz_assetid_for_uri(a_uri)
+    document(a_uri).css("meta[name='squiz-assetid']").first&.attribute("content")&.value
+  end
+
+  def document(a_uri)
+    Nokogiri::HTML(body(a_uri))
+  end
+
+  def body(a_uri)
+    p "!!! Webpage::body url #{a_uri.to_s}"
+    response = HTTParty.get(a_url.to_s, {
+      headers: {
+        "User-Agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"
+      },
+    })
+    # TODO: error checking, retry
+    p "!!! Webpage::body headers #{response.headers}"
+    response.body
   end
 
   def header_html
