@@ -1,0 +1,12 @@
+%div{id: "#{dom_id website}_current_webpage_info"}
+  - if webpage.present?
+    = notice
+    %ul
+      %li
+        Page count: #{website.webpages.count}
+      %li
+        Unscraped count: #{website.webpages.where(status: "unscraped").count}
+      %li
+        URL: #{webpage.url}
+  - else
+    No current webpage

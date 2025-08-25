@@ -1,11 +1,11 @@
 %h1 Scrape
 
-%table
-  %tbody
-    - @website.webpages.order(:page_path).each do |page|
-      - pp page
-      %tr
-        %td<= page.page_path
-        %td<= page.title
-        %td<= page.url
-        %td<= page.status
+= turbo_stream_from @website
+
+%p
+  Page count: #{@website.webpages.count}
+%p
+  = render partial: "websites/current_webpage_info", locals: {website: @website, webpage: nil}
+
+
+= render partial: "page_list", locals: {website: @website}

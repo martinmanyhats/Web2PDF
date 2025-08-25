@@ -2,23 +2,24 @@ class Website < ApplicationRecord
   has_many :webpages, dependent: :destroy
   has_one :root_webpage, class_name: "Webpage", dependent: nil
 
-  def scrape(force: false, page_limit: 20)
+  broadcasts_refreshes
+  after_update_commit -> { broadcast_refresh_later }
+
+  def scrape(force: false, page_limit: nil)
     p "!!! Website::scrape #{inspect}"
     self.root_webpage = Webpage.find_or_initialize_by(url: url) do |page|
       page.website = self
-      page.status = "new"
+      page.status = "unscraped"
       page.page_path = ""
       page.save!
     end
     root_webpage.parent = root_webpage
     root_webpage.page_path = "#{"%04d" % id}"
-    # Force index page to be rescraped to ensure it is fully spidered.
-    root_webpage.status = "unscraped"
     root_webpage.save!
 
     # Create pages reachable from sitemap.
-    spider_sitemap
-    save!
+    # spider_sitemap
+    # save!
 
     # Scrape pages.
     page_count = 0
@@ -26,12 +27,15 @@ class Website < ApplicationRecord
       unscraped_webpages = Webpage.where(status: "unscraped").order(:id)
       p "!!! Website::scrape unscraped_webpages.count #{unscraped_webpages.count}"
       break if unscraped_webpages.empty?
-      unscraped_webpages.each do |page|
-        page.scrape(force: force)
+      unscraped_webpages.each do |webpage|
+        webpage.scrape(force: force)
+        notify_current_webpage(webpage, "scraped") if page_count % 10 == 0
         page_count += 1
-        return if page_count > page_limit
+        # p ">>> page_limit #{page_limit} page_count #{page_count} if #{page_limit && (page_count > page_limit)}"
+        return if page_limit && (page_count > page_limit)
       end
     end
+    notify_page_list
   end
 
   def generate_pdf
@@ -120,14 +124,30 @@ class Website < ApplicationRecord
       page.parent = parent
       page.status = status
       page.page_path = "#{parent.page_path}.#{"%04d" % parent.id}"
-      page.save!
+      Rails.logger.info "Creating webpage url #{url}"
+      Rails.logger.silence do
+        page.save!
+      end
     end
+    notify_current_webpage(webpage, "created")
   end
 
-  def webpage_from_url(webpage_url, force: false)
-    webpage = Webpage.find_or_initialize_by(website: self, parent: root_webpage, url: webpage_url) do |page|
-      page.status = "unscraped"
-    end
-    webpage.scrape(force: force, follow_links: false)
+  def notify_current_webpage(webpage, notice="NONE")
+    Turbo::StreamsChannel.broadcast_replace_to(
+      "web2pdf",
+      target: "website_#{self.id}_current_webpage_info",
+      partial: "websites/current_webpage_info",
+      locals: {website: self, webpage: webpage, notice: notice}
+    )
   end
+
+  def notify_page_list
+    Turbo::StreamsChannel.broadcast_replace_to(
+      "web2pdf",
+      target: "website_#{self.id}_page_list",
+      partial: "websites/page_list",
+      locals: {website: self}
+    )
+  end
+
 end

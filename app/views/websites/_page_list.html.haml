@@ -1,0 +1,10 @@
+%div{id: "#{dom_id website}_page_list"}
+  %table
+    %tbody
+      - @website.webpages.order(:page_path).each do |page|
+        - pp page
+        %tr
+          %td<= linked_page_path(page)
+          %td<= page.title
+          %td<= page.url
+          %td<= page.status

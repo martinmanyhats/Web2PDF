@@ -58,7 +58,8 @@ class WebsitesController < ApplicationController
   end
 
   def scrape
-    @website.scrape(force: true)
+    ScrapeWebsiteJob.perform_later(@website)
+    # @website.scrape(force: true, page_limit: 2)
   end
 
   def generate
