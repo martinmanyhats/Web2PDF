@@ -3,10 +3,12 @@
     = notice
     %ul
       %li
-        Page count: #{website.webpages.count}
+        Pages: #{website.webpages.count}
       %li
-        Unscraped count: #{website.webpages.where(status: "unscraped").count}
+        Unscraped: #{website.webpages.where(status: "unscraped").count}
       %li
-        URL: #{webpage.url}
+        Nonsquiz: #{website.webpages.where(status: "nonsquiz").count}
+      %li
+        URL: #{webpage.squiz_canonical_url}
   - else
     No current webpage

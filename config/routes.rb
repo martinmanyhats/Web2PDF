@@ -6,7 +6,7 @@ Rails.application.routes.draw do
   resources :websites do
     member do
       get "scrape"
-      get "generate"
+      get "generate_pdf"
     end
   end
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html

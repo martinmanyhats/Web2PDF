@@ -9,8 +9,9 @@
 %p
   %b Checksum:
   = @webpage.checksum
-%p
-  %b Children
+- if false
+  %p
+    %b Children
   %ul
     - @webpage.children.each do |child|
       %li

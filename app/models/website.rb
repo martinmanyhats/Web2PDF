@@ -7,15 +7,20 @@ class Website < ApplicationRecord
 
   def scrape(force: false, page_limit: nil)
     p "!!! Website::scrape #{inspect}"
-    self.root_webpage = Webpage.find_or_initialize_by(url: url) do |page|
+    false && self.root_webpage = Webpage.find_or_initialize_by(squiz_assetid: "93") do |page|
       page.website = self
       page.status = "unscraped"
       page.page_path = ""
+      # page.squiz_canonical_url = "https://www.deddingtonhistory.uk/history"
       page.save!
     end
-    root_webpage.parent = root_webpage
-    root_webpage.page_path = "#{"%04d" % id}"
-    root_webpage.save!
+    # root_webpage.parent = root_webpage
+    # root_webpage.create_webpage_for_url("https://www.deddingtonhistory.uk/history")
+    # root_webpage.save!
+    dummy_rootpage = Webpage.new
+    dummy_rootpage.website = self
+    dummy_rootpage.asset_path = ""
+    dummy_rootpage.create_webpage_for_url("https://www.deddingtonhistory.uk/history")
 
     # Create pages reachable from sitemap.
     # spider_sitemap
@@ -24,12 +29,12 @@ class Website < ApplicationRecord
     # Scrape pages.
     page_count = 0
     loop do
-      unscraped_webpages = Webpage.where(status: "unscraped").order(:id)
+      unscraped_webpages = webpages.where(status: "unscraped").order(:id)
       p "!!! Website::scrape unscraped_webpages.count #{unscraped_webpages.count}"
       break if unscraped_webpages.empty?
       unscraped_webpages.each do |webpage|
+        notify_current_webpage(webpage, "scraping") #if page_count % 10 == 0
         webpage.scrape(force: force)
-        notify_current_webpage(webpage, "scraped") if page_count % 10 == 0
         page_count += 1
         # p ">>> page_limit #{page_limit} page_count #{page_count} if #{page_limit && (page_count > page_limit)}"
         return if page_limit && (page_count > page_limit)
@@ -38,13 +43,43 @@ class Website < ApplicationRecord
     notify_page_list
   end
 
+  def generate_pdf_files
+    p "!!! Website::generate_pdf_files"
+    browser = Ferrum::Browser.new(
+      browser_options: {
+        "generate-pdf-document-outline": true
+      }
+    )
+    head = File.read(File.join(Rails.root, 'config', 'website_head.html'))
+    webpages.where(status: "scraped").each do |webpage|
+      p "!!! Website::generate_pdf_files assetid #{webpage.squiz_assetid}"
+      filename_base = "/tmp/dh/dh-#{"%06d" % webpage.squiz_assetid}"
+      File.open("#{filename_base}.html", "wb") do |file|
+        file.write("<html>\n#{head}\n<body>\n")
+        webpage.generate_html(file)
+        file.write("</body>\n</html>\n")
+        file.close
+        page = browser.create_page
+        page.go_to("file://#{filename_base}.html")
+        page.pdf(
+          path: "#{filename_base}.pdf",
+          landscape: true,
+          format: :A4
+        )
+        browser.reset
+      end
+    end
+    browser.quit
+  end
+
   def generate_pdf
     p "!!! Website::generate_pdf"
     File.open("/tmp/dh.html", "wb") do |file|
       head = File.read(File.join(Rails.root, 'config', 'website_head.html'))
       file.write("<html>\n#{head}\n<body>\n")
-      webpages.reject { |page| page.status != "scraped"}.
-        each { |page| page.generate_html(file) }
+      webpages.where(status: "scraped").each { |page| page.generate_html(file) }
+      file.write("</body>\n</html>\n")
+      file.close
       browser = Ferrum::Browser.new(
         browser_options: {
           "generate-pdf-document-outline": true
@@ -55,10 +90,9 @@ class Website < ApplicationRecord
       page.pdf(
         path: "/tmp/dh.pdf",
         landscape: true,
-        format: :A4
+        format: :A4,
+        timeout: 900
       )
-      file.write("</body>\n</html>\n")
-      file.close
       browser.reset
       browser.quit
     end
@@ -78,6 +112,10 @@ class Website < ApplicationRecord
   def url_internal?(url2)
     # p "!!! url #{url} url2 #{url2} #{url2.starts_with?(url)}"
     url2.starts_with?(url)
+  end
+
+  def host
+    @_host ||= Addressable::URI.parse(url).host
   end
 
   private
@@ -149,5 +187,4 @@ class Website < ApplicationRecord
       locals: {website: self}
     )
   end
-
 end
