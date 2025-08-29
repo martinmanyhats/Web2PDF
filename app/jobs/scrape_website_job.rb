@@ -1,8 +1,8 @@
 class ScrapeWebsiteJob < ApplicationJob
   queue_as :default
 
-  def perform(website)
+  def perform(website, follow_links: true)
     p "!!! ScrapeWebsiteJob::perform website #{website.inspect}"
-    website.scrape(force: true)#, page_limit: 20)
+    website.scrape(follow_links: follow_links)
   end
 end

@@ -5,26 +5,18 @@ class Website < ApplicationRecord
   broadcasts_refreshes
   after_update_commit -> { broadcast_refresh_later }
 
-  def scrape(force: false, page_limit: nil)
+  def scrape(follow_links: true, page_limit: nil)
     p "!!! Website::scrape #{inspect}"
-    false && self.root_webpage = Webpage.find_or_initialize_by(squiz_assetid: "93") do |page|
+    self.root_webpage = Webpage.find_or_initialize_by(squiz_assetid: "93") do |page|
       page.website = self
-      page.status = "unscraped"
       page.page_path = ""
-      # page.squiz_canonical_url = "https://www.deddingtonhistory.uk/history"
-      page.save!
+      page.status = "unscraped"
     end
-    # root_webpage.parent = root_webpage
-    # root_webpage.create_webpage_for_url("https://www.deddingtonhistory.uk/history")
-    # root_webpage.save!
-    dummy_rootpage = Webpage.new
-    dummy_rootpage.website = self
-    dummy_rootpage.asset_path = ""
-    dummy_rootpage.create_webpage_for_url("https://www.deddingtonhistory.uk/history")
+    root_webpage.extract_squiz
+    root_webpage.save!
 
     # Create pages reachable from sitemap.
     # spider_sitemap
-    # save!
 
     # Scrape pages.
     page_count = 0
@@ -34,7 +26,7 @@ class Website < ApplicationRecord
       break if unscraped_webpages.empty?
       unscraped_webpages.each do |webpage|
         notify_current_webpage(webpage, "scraping") #if page_count % 10 == 0
-        webpage.scrape(force: force)
+        webpage.scrape(follow_links: follow_links)
         page_count += 1
         # p ">>> page_limit #{page_limit} page_count #{page_count} if #{page_limit && (page_count > page_limit)}"
         return if page_limit && (page_count > page_limit)
@@ -43,7 +35,7 @@ class Website < ApplicationRecord
     notify_page_list
   end
 
-  def generate_pdf_files
+  def generate_pdf_files(assetids: nil)
     p "!!! Website::generate_pdf_files"
     browser = Ferrum::Browser.new(
       browser_options: {
@@ -51,28 +43,39 @@ class Website < ApplicationRecord
       }
     )
     head = File.read(File.join(Rails.root, 'config', 'website_head.html'))
-    webpages.where(status: "scraped").each do |webpage|
+    if assetids.nil?
+      pages = webpages.where(status: "scraped")
+    else
+      pages = webpages.where(squiz_assetid: assetids)
+    end
+    p "!!! Website::generate_pdf_files count #{pages.count}"
+    pages.each do |webpage|
       p "!!! Website::generate_pdf_files assetid #{webpage.squiz_assetid}"
-      filename_base = "/tmp/dh/dh-#{"%06d" % webpage.squiz_assetid}"
-      File.open("#{filename_base}.html", "wb") do |file|
-        file.write("<html>\n#{head}\n<body>\n")
-        webpage.generate_html(file)
-        file.write("</body>\n</html>\n")
-        file.close
-        page = browser.create_page
-        page.go_to("file://#{filename_base}.html")
-        page.pdf(
-          path: "#{filename_base}.pdf",
-          landscape: true,
-          format: :A4
-        )
-        browser.reset
-      end
+      html_filename = webpage.generate_html(head)
+      page = browser.create_page
+      page.go_to("file://#{html_filename}")
+      page.pdf(
+        path: webpage.generated_filename("pdf"),
+        landscape: true,
+        format: :A4
+      )
+      browser.reset
     end
     browser.quit
   end
 
-  def generate_pdf
+  def XXgenerate_pdfs
+    scraped_pages = Webpage.where(status: "scraped")
+    root_pdf_filename = root_webpage.generate_pdf
+    pdf_filenames = scraped_pages.map do |page|
+      page.generate_pdf unless page == root_webpage
+    end.compact
+    pdf_filenames.insert(0, root_pdf_filename)
+    p "!!! pdf_filenames #{pdf_filenames.inspect}"
+    pdf_filenames
+  end
+
+  def XXgenerate_pdf
     p "!!! Website::generate_pdf"
     File.open("/tmp/dh.html", "wb") do |file|
       head = File.read(File.join(Rails.root, 'config', 'website_head.html'))
@@ -96,17 +99,6 @@ class Website < ApplicationRecord
       browser.reset
       browser.quit
     end
-  end
-
-  def generate_pdfs
-    scraped_pages = Webpage.where(status: "scraped")
-    root_pdf_filename = root_webpage.generate_pdf
-    pdf_filenames = scraped_pages.map do |page|
-      page.generate_pdf unless page == root_webpage
-    end.compact
-    pdf_filenames.insert(0, root_pdf_filename)
-    p "!!! pdf_filenames #{pdf_filenames.inspect}"
-    pdf_filenames
   end
 
   def url_internal?(url2)

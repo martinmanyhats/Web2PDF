@@ -7,8 +7,6 @@
       %li
         Unscraped: #{website.webpages.where(status: "unscraped").count}
       %li
-        Nonsquiz: #{website.webpages.where(status: "nonsquiz").count}
-      %li
         URL: #{webpage.squiz_canonical_url}
   - else
     No current webpage
