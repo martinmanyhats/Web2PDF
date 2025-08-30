@@ -130,7 +130,7 @@ class Webpage < ApplicationRecord
         element.attributes["href"].value = "#{website.webroot}/#{generated_filename_base(dest_page.squiz_assetid)}.pdf"
       when "pdf"
         p "!!! PDF"
-        website.add_pdf_asset(uri)
+        website.add_pdf_uri(uri)
       when "image"
         p "!!! IMAGE"
       else

@@ -9,6 +9,8 @@ class Website < ApplicationRecord
 
   attr_reader :webroot
 
+  Asset = Struct.new(:assetid, :short_name, :filename)
+
   def scrape(options)
     p "!!! Website::scrape options #{options.inspect} #{inspect}"
     if options[:assetid]
@@ -75,7 +77,7 @@ class Website < ApplicationRecord
       pages = webpages.where(status: "scraped")
     end
     p "!!! Website:generate_pdf_files count #{pages.count}"
-    @pdf_assets = []
+    @pdf_uris = []
     pages.each do |webpage|
       p "========== Website:generate_pdf_files assetid #{webpage.squiz_assetid}"
       html_filename = webpage.generate_html(html_head)
@@ -139,14 +141,16 @@ class Website < ApplicationRecord
     @_host ||= Addressable::URI.parse(url).host
   end
 
-  def add_pdf_asset(uri)
-    p "!!! add_pdf_asset uri #{uri}"
-    @pdf_assets << uri
+  def add_pdf_uri(uri)
+    p "!!! add_pdf_uri uri #{uri}"
+    @pdf_uris ||= Set.new
+    @pdf_uris << uri
+    p "!!! add_pdf_uri @pdf_uris.size #{@pdf_uris.size}"
   end
 
   def generate_pdf_assets(options)
-    p "!!! @pdf_assets.count #{@pdf_assets.count}"
-    @pdf_assets.each do |uri|
+    p "!!! @pdf_uris.count #{@pdf_uris.count}"
+    @pdf_uris.each do |uri|
       p "!!! generate_pdf_asset uri #{uri}"
       (pdf_assetid, pdf_filename) = uri.to_s.match(%r{__data/assets/pdf_file/\d+/(\d+)/(.*\.pdf$)}).captures
       raise "Website:generate_pdf_assets cannot parse uri #{uri}" if pdf_assetid.nil? || pdf_filename.nil?
@@ -156,13 +160,14 @@ class Website < ApplicationRecord
   end
 
   def generate_pdf_toc(options)
-    p "!!! generate_pdf_toc"
+    p "!!! generate_pdf_toc size #{@pdf_uris.size}"
+    get_pdf_list
     File.open("/tmp/dh/toc-pdfs.html", "w") do |file|
-      file.write("<html>\n#{html_head}\n<body>\n<ul>\n")
-      @pdf_assets.each do |uri|
-        file.write("<li><a href='#{uri}'>#{uri}</a></li>\n")
+      file.write("<html>\n#{html_head}\n<body>\n<h1>PDF TOC</h1><table>\n")
+      @pdfs_by_filename.each_key.sort do |filename|
+        file.write("<tr><td><a href='#{filename}'>#{filename}</a></td></tr>\n")
       end
-      file.write("</ul>\n</body>\n</html>\n")
+      file.write("</table>\n</body>\n</html>\n")
       file.close
     end
   end
@@ -233,6 +238,27 @@ class Website < ApplicationRecord
 
   def html_head
     @_html_head ||= File.read(File.join(Rails.root, 'config', 'website_head.html'))
+  end
+
+  def get_pdf_list
+    p "!!! get_pdf_list"
+    report = Nokogiri::HTML(URI.open("#{url}/reports/allpdfs"))
+    pdfs = report.css("[id='allpdfs'] tr")
+    p "!!! get_pdf_list size #{pdfs.size}"
+    @pdfs_by_filename = {}
+    pdfs.map do |pdf|
+      (assetid, short_name, filename)  = pdf.css("td").map(&:text)
+      if @pdfs_by_filename.has_key?(filename)
+        p "!!! DUPLICATE filename #{filename} assetid #{@pdfs_by_filename[filename].assetid}:#{assetid} short_names #{@pdfs_by_filename[filename].short_name}:#{short_name}"
+      end
+      @pdfs_by_filename[filename] = Asset.new(assetid: assetid.to_i, short_name: short_name, filename: filename)
+    end
+    @pdf_uris.map do |uri|
+      unless @pdfs_by_filename.has_key?(File.basename(uri.to_s))
+        raise "Website:get_pdf_list unknown filename #{filename}"
+      end
+    end
+    p "!!! size #{@pdfs_by_filename.keys.size} uniq #{@pdfs_by_filename.each_key.sort.uniq.size}"
   end
 
   def notify_current_webpage(webpage, notice="NONE")
