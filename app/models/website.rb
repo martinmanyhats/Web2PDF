@@ -5,6 +5,8 @@ class Website < ApplicationRecord
   broadcasts_refreshes
   after_update_commit -> { broadcast_refresh_later }
 
+  attr_reader :webroot
+
   def scrape(follow_links: true, page_limit: nil)
     p "!!! Website::scrape #{inspect}"
     self.root_webpage = Webpage.find_or_initialize_by(squiz_assetid: "93") do |page|
@@ -35,18 +37,24 @@ class Website < ApplicationRecord
     notify_page_list
   end
 
-  def generate_pdf_files(assetids: nil)
-    p "!!! Website::generate_pdf_files"
+  def generate_pdf_files(options)
+    p "!!! Website::generate_pdf_files options #{options.inspect}"
+    FileUtils.mkdir_p("/tmp/dh")
     browser = Ferrum::Browser.new(
       browser_options: {
         "generate-pdf-document-outline": true
       }
     )
     head = File.read(File.join(Rails.root, 'config', 'website_head.html'))
-    if assetids.nil?
-      pages = webpages.where(status: "scraped")
+    if options[:webroot].present?
+      @webroot = options[:webroot]
     else
-      pages = webpages.where(squiz_assetid: assetids)
+      @webroot = "file:///tmp/dh"
+    end
+    if options[:assetid].present?
+      pages = webpages.where(squiz_assetid: options[:assetid])
+    else
+    pages = webpages.where(status: "scraped")
     end
     p "!!! Website::generate_pdf_files count #{pages.count}"
     pages.each do |webpage|

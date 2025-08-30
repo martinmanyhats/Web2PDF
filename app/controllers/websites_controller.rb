@@ -72,12 +72,10 @@ class WebsitesController < ApplicationController
   end
 
   def generate_pdf
-    if params[:assetid].present?
-      assetid = params[:assetid].to_i
-      @website.generate_pdf_files(assetids: [assetid])
-    else
-      @website.generate_pdf_files
-    end
+    options = {}
+    options[:webroot] = params[:webroot] if params[:webroot].present?
+    options[:assetid] = params[:assetid].to_i if params[:assetid].present?
+    @website.generate_pdf_files(options)
   end
 
   private

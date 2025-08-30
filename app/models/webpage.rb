@@ -121,10 +121,13 @@ class Webpage < ApplicationRecord
       dest_page = Webpage.where(squiz_canonical_url: dest_url)&.first
       if dest_page
         p "!!! internally linking #{href} to #{dest_url} {#{dest_page.squiz_short_name}"
-        link.attributes["href"].value = "https://martinreed.co.uk/dh/#{generated_filename_base(dest_page.squiz_assetid)}.pdf"
+        link.attributes["href"].value = "#{website.webroot}/#{generated_filename_base(dest_page.squiz_assetid)}.pdf"
       else
-        # Not actually an internal webpage.
-        # p "!!! not internal #{href}"
+        # Not actually an internal webpage. Might be an internal PDF.
+        if href.match?(/#{website.url}.*\.pdf$/)
+          p "!!! internal PDF #{href}"
+          raise "internal PDF"
+        end
       end
       # TODO anchors
     end
@@ -230,9 +233,8 @@ class Webpage < ApplicationRecord
   end
 
   def breadcrumbs_html
-    p "!!! breadcrumbs_html #{squiz_breadcrumbs}"
+    # p "!!! breadcrumbs_html #{squiz_breadcrumbs}"
     crumbs = Nokogiri::HTML(squiz_breadcrumbs).css("a").map do |crumb|
-      p "!!! CRUMB #{crumb["href"]}-#{crumb.text.strip}"
       "<span class='webpage-breadcrumb'><a href='#{crumb["href"]}'>#{crumb.text.strip}</a></span>"
     end
     crumbs.join("\n")
