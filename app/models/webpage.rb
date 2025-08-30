@@ -47,7 +47,11 @@ class Webpage < ApplicationRecord
         if link.include?("./?a=")
           raise "Webpage:scrape: link not interpolated: #{link} in Squiz assetid #{squiz_assetid} (#{squiz_short_name}) #{squiz_canonical_url}"
         end
-        create_webpage_for_url(link) if useful_webpage_link?(link)
+        if useful_webpage_link?(link)
+          create_webpage_for_url(link)
+        else
+
+        end
       end
     end
 
@@ -60,7 +64,10 @@ class Webpage < ApplicationRecord
 
     self.scrape_duration = (Time.now - start_at).seconds
     self.status = "scraped"
-    save!
+    p "!!! scrape save #{squiz_assetid}"
+    Rails.logger.silence do
+      save!
+    end
   end
 
   def create_webpage_for_url(a_url)
@@ -97,7 +104,7 @@ class Webpage < ApplicationRecord
       file.write("<html>\n#{head}\n<body>\n")
       parsed_content = Nokogiri::HTML(content)
       process_links(parsed_content)
-      process_images(parsed_content)
+      # process_images(parsed_content)
       file.write("<div id='webpage-#{"%06d" % squiz_assetid}'>#{header_html}#{parsed_content.to_html}</div>")
       file.write("</body>\n</html>\n")
       file.close
@@ -108,33 +115,34 @@ class Webpage < ApplicationRecord
 
   def generated_filename(suffix, assetid = squiz_assetid) = "/tmp/dh/#{generated_filename_base(assetid)}.#{suffix}"
 
-  def generated_filename_base(assetid = squiz_assetid) = "dh-#{"%06d" % assetid}"
+  def generated_filename_base(assetid = squiz_assetid) = "art-#{"%06d" % assetid}"
 
   private
 
   def process_links(parsed_content)
-    parsed_content.css("a").map.each do |link|
-      href = link["href"]
-      next unless useful_webpage_link?(href)
-      dest_url = canonicalise(href).to_s
-      # p "!!! dest_url #{dest_url.inspect}"
-      dest_page = Webpage.where(squiz_canonical_url: dest_url)&.first
-      if dest_page
-        p "!!! internally linking #{href} to #{dest_url} {#{dest_page.squiz_short_name}"
-        link.attributes["href"].value = "#{website.webroot}/#{generated_filename_base(dest_page.squiz_assetid)}.pdf"
+    parsed_content.css("a").each do |element|
+      next if element["href"].blank?
+      uri = canonicalise(element["href"])
+      case linked_type(uri)
+      when "webpage"
+        dest_page = Webpage.find_sole_by(squiz_canonical_url: uri.to_s)
+        p "!!! internally linking to #{uri.to_s} {#{dest_page.squiz_short_name}"
+        element.attributes["href"].value = "#{website.webroot}/#{generated_filename_base(dest_page.squiz_assetid)}.pdf"
+      when "pdf"
+        p "!!! PDF"
+        website.add_pdf_asset(uri)
+      when "image"
+        p "!!! IMAGE"
       else
-        # Not actually an internal webpage. Might be an internal PDF.
-        if href.match?(/#{website.url}.*\.pdf$/)
-          p "!!! internal PDF #{href}"
-          raise "internal PDF"
-        end
+        p "!!! ignore #{uri.to_s}"
+        next
       end
       # TODO anchors
     end
   end
 
   def process_images(body)
-    false && parsed_content.css("img").map.each do |image|
+    parsed_content.css("img").map.each do |image|
       p "!!! image #{image["src"]}"
       url = image["src"]
       case File.extname(url).downcase
@@ -151,7 +159,7 @@ class Webpage < ApplicationRecord
   end
 
   def canonicalise(string_or_uri)
-    # p "!!! canonicalise #{string_or_uri.inspect}"
+    p "!!! canonicalise #{string_or_uri.inspect}"
     uri = string_or_uri.kind_of?(Addressable::URI) ? string_or_uri : Addressable::URI.parse(string_or_uri.strip)
     return uri if uri.scheme == "mailto"
     website_host = Addressable::URI.parse(website.url).host
@@ -175,10 +183,29 @@ class Webpage < ApplicationRecord
   end
 
   def extract_links
-    document.css("a").map { |a| a.attribute("href").to_s.strip }
+    document.css("a").map { |a| a.attribute("href").to_s.strip }.compact
   end
 
-  def useful_webpage_link?(link)
+  def linked_type(uri)
+    p "!!! linked_type #{uri}"
+    raise "Webpage:linked_type uri http://" if uri.to_s == "http://"  # HACK for DH content error.
+    if uri.host != website.host
+      p "~~~~~~ offsite"
+      return "offsite"
+    end
+    if uri.path.blank?
+      p "~~~~~~ blank path"
+      return nil
+    end
+    return nil unless uri.scheme == "http" || uri.scheme == "https"
+    return nil if uri.path.match?(%r{/(mainmenu|reports)\/})
+    return "pdf" if uri.path.match?(/\.pdf$/i)
+    return "image" if uri.path.match?(/\.(jpg|jpeg|png|gif)$/i)
+    return "webpage" if Webpage.where(squiz_canonical_url: uri.to_s).exists?
+    nil
+  end
+
+  def XXuseful_webpage_link?(link)
     # p "!!! useful_webpage_link? #{link}"
     return false if link.blank? || link == "http://"  # HACK for DH content errora.
     uri = Addressable::URI.parse(link)
@@ -206,30 +233,13 @@ class Webpage < ApplicationRecord
   end
 
   def document_for_url(a_url)
-    Nokogiri::HTML(body(canonicalise(a_url)))
-  end
-
-  def body(a_url)
-    p "!!! Webpage:body url #{a_url}"
-    response = HTTParty.get(a_url, {
-      headers: {
-        "User-Agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"
-      },
-    })
-    # TODO: error checking, retry
-    p "!!! Webpage:body headers #{response.headers}"
-    response.body
+    Nokogiri::HTML(website.body(canonicalise(a_url)))
   end
 
   def header_html
     html_title = "<span class='webpage-title'>#{title.present? ? title : squiz_short_name}</span>"
     html_breadcrumbs = "<span class='webpage-breadcrumbs'>#{breadcrumbs_html}</span>"
     "<div class='webpage-header'>#{html_title}#{html_breadcrumbs}</div>"
-  end
-
-  def XXtimestamp_html
-    asset_link = "<a href='#{website.url}?a=#{squiz_assetid}'>#{squiz_assetid}</a>"
-    "<div class='webpage-timestamp'>Last updated #{self.squiz_updated}, asset #{asset_link}</div>"
   end
 
   def breadcrumbs_html

@@ -58,17 +58,9 @@ class WebsitesController < ApplicationController
   end
 
   def scrape
-    follow_links = true
-    if params[:unscrape].present?
-      assetid = params[:unscrape].to_i
-      webpage = Webpage.find_by(squiz_assetid: assetid)
-      if webpage
-        webpage.status = "unscraped"
-        webpage.save!
-      end
-      follow_links = false
-    end
-    ScrapeWebsiteJob.perform_later(@website, follow_links: follow_links)
+    options = {}
+    options[:assetid] = params[:assetid].to_i if params[:assetid].present?
+    ScrapeWebsiteJob.perform_later(@website, options)
   end
 
   def generate_pdf

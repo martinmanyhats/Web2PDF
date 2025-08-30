@@ -1,3 +1,5 @@
+require 'open-uri'
+
 class Website < ApplicationRecord
   has_many :webpages, dependent: :destroy
   has_one :root_webpage, class_name: "Webpage", dependent: nil
@@ -7,8 +9,26 @@ class Website < ApplicationRecord
 
   attr_reader :webroot
 
-  def scrape(follow_links: true, page_limit: nil)
-    p "!!! Website::scrape #{inspect}"
+  def scrape(options)
+    p "!!! Website::scrape options #{options.inspect} #{inspect}"
+    if options[:assetid]
+      scrape_one(options[:assetid].to_i)
+    else
+      scrape_all
+    end
+    notify_page_list
+  end
+
+  def scrape_one(assetid)
+    p "!!! scrape_one assetid #{assetid}"
+    webpage = webpages.find_sole_by(squiz_assetid: assetid)
+    raise "Website:scrape_one assetid not found #{assetid}" unless webpage
+    notify_current_webpage(webpage, "scraping")
+    webpage.status = "unscraped"
+    webpage.scrape(follow_links: false)
+  end
+
+  def scrape_all
     self.root_webpage = Webpage.find_or_initialize_by(squiz_assetid: "93") do |page|
       page.website = self
       page.page_path = ""
@@ -20,32 +40,30 @@ class Website < ApplicationRecord
     # Create pages reachable from sitemap.
     # spider_sitemap
 
-    # Scrape pages.
+    # Loop until all pages are scraped.
     page_count = 0
     loop do
       unscraped_webpages = webpages.where(status: "unscraped").order(:id)
       p "!!! Website::scrape unscraped_webpages.count #{unscraped_webpages.count}"
       break if unscraped_webpages.empty?
       unscraped_webpages.each do |webpage|
-        notify_current_webpage(webpage, "scraping") #if page_count % 10 == 0
-        webpage.scrape(follow_links: follow_links)
+        notify_current_webpage(webpage, "scraping")
+        webpage.scrape(follow_links: true)
         page_count += 1
         # p ">>> page_limit #{page_limit} page_count #{page_count} if #{page_limit && (page_count > page_limit)}"
         return if page_limit && (page_count > page_limit)
       end
     end
-    notify_page_list
   end
 
   def generate_pdf_files(options)
-    p "!!! Website::generate_pdf_files options #{options.inspect}"
+    p "!!! Website:generate_pdf_files options #{options.inspect}"
     FileUtils.mkdir_p("/tmp/dh")
     browser = Ferrum::Browser.new(
       browser_options: {
         "generate-pdf-document-outline": true
       }
     )
-    head = File.read(File.join(Rails.root, 'config', 'website_head.html'))
     if options[:webroot].present?
       @webroot = options[:webroot]
     else
@@ -54,12 +72,13 @@ class Website < ApplicationRecord
     if options[:assetid].present?
       pages = webpages.where(squiz_assetid: options[:assetid])
     else
-    pages = webpages.where(status: "scraped")
+      pages = webpages.where(status: "scraped")
     end
-    p "!!! Website::generate_pdf_files count #{pages.count}"
+    p "!!! Website:generate_pdf_files count #{pages.count}"
+    @pdf_assets = []
     pages.each do |webpage|
-      p "!!! Website::generate_pdf_files assetid #{webpage.squiz_assetid}"
-      html_filename = webpage.generate_html(head)
+      p "========== Website:generate_pdf_files assetid #{webpage.squiz_assetid}"
+      html_filename = webpage.generate_html(html_head)
       page = browser.create_page
       page.go_to("file://#{html_filename}")
       page.pdf(
@@ -70,6 +89,8 @@ class Website < ApplicationRecord
       browser.reset
     end
     browser.quit
+    generate_pdf_assets(options)
+    generate_pdf_toc(options)
   end
 
   def XXgenerate_pdfs
@@ -116,6 +137,46 @@ class Website < ApplicationRecord
 
   def host
     @_host ||= Addressable::URI.parse(url).host
+  end
+
+  def add_pdf_asset(uri)
+    p "!!! add_pdf_asset uri #{uri}"
+    @pdf_assets << uri
+  end
+
+  def generate_pdf_assets(options)
+    p "!!! @pdf_assets.count #{@pdf_assets.count}"
+    @pdf_assets.each do |uri|
+      p "!!! generate_pdf_asset uri #{uri}"
+      (pdf_assetid, pdf_filename) = uri.to_s.match(%r{__data/assets/pdf_file/\d+/(\d+)/(.*\.pdf$)}).captures
+      raise "Website:generate_pdf_assets cannot parse uri #{uri}" if pdf_assetid.nil? || pdf_filename.nil?
+      filename = "/tmp/dh/pdf-#{"%06d" % pdf_assetid}-#{pdf_filename}"
+      IO.copy_stream(URI.open(uri), filename)
+    end
+  end
+
+  def generate_pdf_toc(options)
+    p "!!! generate_pdf_toc"
+    File.open("/tmp/dh/toc-pdfs.html", "w") do |file|
+      file.write("<html>\n#{html_head}\n<body>\n<ul>\n")
+      @pdf_assets.each do |uri|
+        file.write("<li><a href='#{uri}'>#{uri}</a></li>\n")
+      end
+      file.write("</ul>\n</body>\n</html>\n")
+      file.close
+    end
+  end
+
+  def body(a_url)
+    p "!!! Website:body url #{a_url}"
+    response = HTTParty.get(a_url, {
+      headers: {
+        "User-Agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"
+      },
+    })
+    # TODO: error checking, retry
+    p "!!! Website:body headers #{response.headers}"
+    response.body
   end
 
   private
@@ -168,6 +229,10 @@ class Website < ApplicationRecord
       end
     end
     notify_current_webpage(webpage, "created")
+  end
+
+  def html_head
+    @_html_head ||= File.read(File.join(Rails.root, 'config', 'website_head.html'))
   end
 
   def notify_current_webpage(webpage, notice="NONE")
