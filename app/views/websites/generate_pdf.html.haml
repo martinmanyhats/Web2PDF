@@ -1,8 +1,15 @@
-%h1 Generate
-
+%h1 Generate PDF
+%table
+  %tbody
+    - @website.pdfs_by_filename.each_pair do |filename, pdf|
+      %tbody
+        %tr
+          %td<= pdf.assetid
+          %td<= pdf.digest
+          %td<= filename
 %table
   %tbody
     - @website.webpages.each do |page|
       %tr
-        %td<= page.title
+        %td<= page.squiz_assetid
         %td<= page.squiz_canonical_url

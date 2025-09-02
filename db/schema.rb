@@ -10,7 +10,20 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_03_181220) do
+ActiveRecord::Schema[8.0].define(version: 2025_09_01_100450) do
+  create_table "assets", force: :cascade do |t|
+    t.integer "assetid", null: false
+    t.string "asset_type", null: false
+    t.string "asset_name", null: false
+    t.string "asset_short_name", null: false
+    t.string "asset_url"
+    t.string "digest"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["asset_url"], name: "index_assets_on_asset_url", unique: true
+    t.index ["assetid"], name: "index_assets_on_assetid", unique: true
+  end
+
   create_table "pdfs", force: :cascade do |t|
     t.integer "website_id", null: false
     t.string "url"
@@ -46,6 +59,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_03_181220) do
     t.string "squiz_breadcrumbs"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["squiz_assetid"], name: "index_webpages_on_squiz_assetid"
+    t.index ["squiz_canonical_url"], name: "index_webpages_on_squiz_canonical_url"
     t.index ["website_id"], name: "index_webpages_on_website_id"
   end
 

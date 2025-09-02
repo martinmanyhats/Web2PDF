@@ -1,5 +1,5 @@
 class WebsitesController < ApplicationController
-  before_action :set_website, only: %i[ show edit update destroy scrape generate_pdf ]
+  before_action :set_website, only: %i[ show edit update destroy extract scrape generate_pdf ]
 
   # GET /websites or /websites.json
   def index
@@ -63,10 +63,18 @@ class WebsitesController < ApplicationController
     ScrapeWebsiteJob.perform_later(@website, options)
   end
 
+  def extract
+    options = {}
+    options[:assetid] = params[:assetid].to_i if params[:assetid].present?
+    options[:skiplist] = params[:assetid].to_i if params[:skiplist].present?
+    ExtractWebsiteJob.perform_later(@website, options)
+  end
+
   def generate_pdf
     options = {}
     options[:webroot] = params[:webroot] if params[:webroot].present?
     options[:assetid] = params[:assetid].to_i if params[:assetid].present?
+    options[:digest] = true if params[:digest].present?
     @website.generate_pdf_files(options)
   end
 

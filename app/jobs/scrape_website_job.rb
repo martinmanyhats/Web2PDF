@@ -3,6 +3,6 @@ class ScrapeWebsiteJob < ApplicationJob
 
   def perform(website, options)
     p "!!! ScrapeWebsiteJob::perform website options #{options.inspect} #{website.inspect}"
-    website.scrape(options)
+    website.spider(options)
   end
 end
