@@ -253,10 +253,6 @@ class Website < ApplicationRecord
     response.body
   end
 
-  def sh(assetid)
-    squiz_hash(assetid)
-  end
-
   private
 
   def stream_lines_for_url(url)
@@ -287,23 +283,25 @@ class Website < ApplicationRecord
     stream_lines_for_url("#{url}/reports/publishedassets").each do |line|
       if line =~ /tr class="squiz_asset"/
         values = line.match(assets_regex)
-        p "!!! values #{values.inspect}"
-        Asset.find_or_create_by!(assetid: values[1]) do |asset|
-          asset.asset_type = values[2]
-          asset.asset_name = values[3]
-          asset.asset_short_name = values[4]
-          asset.asset_url = values[5]
-          if asset.asset_url.blank?
-            case asset.asset_type
-            when "MS Word Document"
-              asset.asset_url = "#{url}/__data/assets/word_doc/#{squiz_hash(asset.assetid)}{/#{asset.assetid}/#{asset.asset_name}"
-            when "MS Excel Document"
-              asset.asset_url = "#{url}/__data/assets/excel_doc/#{squiz_hash(asset.assetid)}/#{asset.assetid}/#{asset.asset_name}"
-            else
-              raise "Website:get_published_assets missing asset_url #{asset.inspect}"
+        # p "!!! values #{values.inspect}"
+        Rails.logger.silence do
+          Asset.find_or_create_by!(assetid: values[1]) do |asset|
+            asset.asset_type = values[2]
+            asset.name = values[3]
+            asset.short_name = values[4]
+            asset.url = values[5]
+            if asset.url.blank?
+              case asset.asset_type
+              when "MS Word Document"
+                asset.url = "#{url}/__data/assets/word_doc/#{squiz_hash(asset.assetid)}{/#{asset.assetid}/#{asset.name}"
+              when "MS Excel Document"
+                asset.url = "#{url}/__data/assets/excel_doc/#{squiz_hash(asset.assetid)}/#{asset.assetid}/#{asset.name}"
+              else
+                raise "Website:get_published_assets missing url #{asset.inspect}"
+              end
             end
+            asset.save!
           end
-          asset.save!
         end
       end
     end

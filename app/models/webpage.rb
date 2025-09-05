@@ -35,26 +35,32 @@ class Webpage < ApplicationRecord
     p "!!! Webpage:spider #{inspect}"
     raise "Webpage:spider not unscraped #{inspect}" unless status == "unscraped"
     raise "Webpage:spider missing squiz_assetid #{inspect}" unless squiz_assetid
-    # raise "Webpage:spider missing squiz_canonical_url #{inspect}" unless squiz_canonical_url
     p ">>>>>> Webpage:spider #{squiz_assetid} squiz_canonical_url #{squiz_canonical_url}"
     start_at = Time.now
 
     extract_info_from_document
 
     if follow_links
-      webpage_links.each do |link|
-        link = canonicalise(link)
-        p "!!! Webpage:spider link #{link} from #{squiz_assetid} (#{title})"
-        raise "Webpage:spider: link not interpolated: #{link} in Squiz assetid #{squiz_assetid} (#{squiz_short_name}) #{squiz_canonical_url}" if link.include?("./?a=")
-        asset = Asset.find_by(squiz_canonical_url: link)&.first
+      content_links.each do |link|
+        raise "Webpage:spider link not interpolated #{link} in Squiz assetid #{squiz_assetid} (#{squiz_short_name}) #{squiz_canonical_url}" if link.include?("./?a=")
+        uri = canonicalise(link)
+        link = uri.to_s
+        next if uri.host != website.host
+        next if uri.path.blank?
+        next unless uri.scheme == "http" || uri.scheme == "https"
+        next if uri.path.match?(%r{/(mainmenu|reports|sitemap|sitearchive|testing)})
+        next if uri.path.match?(/\.(jpg|jpeg|png|gif|pdf|doc|docx|xls|xlsx|xml|mp3|js|css|rtf|txt)$/i)
+        p "!!! Webpage:spider link #{link} from #{squiz_assetid}"
+        asset = Asset.find_by(url: link)
         p "!!! Webpage:asset #{asset.inspect}"
         if asset.present?
           if asset.page?
             create_webpage(asset)
           else
-            p "!!! Webpage:spider: asset is not a page #{link}"
+            p "!!! Webpage:spider asset is not a page #{link}"
           end
         else
+          p "!!! content #{content}"
           raise "Webpage:spider missing asset for #{link}"
         end
       end
@@ -77,13 +83,13 @@ class Webpage < ApplicationRecord
 
   def create_webpage(asset)
     p "!!! Webpage:create_webpage asset #{asset.inspect}"
-    webpage = Webpage.find_or_initialize_by(squiz_canonical_url: asset.asset_url) do |newpage|
+    webpage = Webpage.find_or_initialize_by(squiz_canonical_url: asset.url) do |newpage|
       p "========== new Webpage assetid #{asset.assetid}"
       newpage.website = website
-      newpage.asset_path = "#{asset_path}/#{"%06d" % assetid}"
+      newpage.asset_path = "#{asset_path}/#{"%06d" % asset.assetid}"
       newpage.status = "unscraped"
       newpage.squiz_assetid = asset.assetid
-      p "!!! create_webpage_for_url save #{assetid} #{a_url}"
+      p "!!! create_webpage_for_url save #{asset.assetid} #{asset.url}"
       Rails.logger.silence do
         newpage.save!
       end
@@ -115,7 +121,7 @@ class Webpage < ApplicationRecord
     self.squiz_short_name = document.css("meta[name='squiz-short_name']").first&.attribute("content")&.value
     self.squiz_updated = DateTime.iso8601(document.css("meta[name='squiz-updated_iso8601']").first&.attribute("content")&.value)
     self.title = document.css("#newpage-title").first&.text
-    self.content =  document.css("#main-content-wrapper")&.inner_html
+    self.content =  document.css("#main-content")&.inner_html
   end
 
   def generate_html(head)
@@ -203,8 +209,8 @@ class Webpage < ApplicationRecord
     uri
   end
 
-  def webpage_links
-    document.css("a").map { |a| a.attribute("href").to_s.strip }.compact
+  def content_links
+    Nokogiri::HTML(content).css("a").map { |a| a.attribute("href").to_s.strip }.compact
   end
 
   def linked_type(url)

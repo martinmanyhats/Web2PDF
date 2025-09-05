@@ -14,14 +14,14 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_01_100450) do
   create_table "assets", force: :cascade do |t|
     t.integer "assetid", null: false
     t.string "asset_type", null: false
-    t.string "asset_name", null: false
-    t.string "asset_short_name", null: false
-    t.string "asset_url"
+    t.string "name", null: false
+    t.string "short_name", null: false
+    t.string "url"
     t.string "digest"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["asset_url"], name: "index_assets_on_asset_url", unique: true
     t.index ["assetid"], name: "index_assets_on_assetid", unique: true
+    t.index ["url"], name: "index_assets_on_url", unique: true
   end
 
   create_table "pdfs", force: :cascade do |t|
