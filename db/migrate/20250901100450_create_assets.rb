@@ -5,7 +5,6 @@ class CreateAssets < ActiveRecord::Migration[8.0]
       t.string :asset_type, null: false
       t.string :name, null: false
       t.string :short_name, null: false
-      t.string :url, index: { unique: true }
       t.string :digest
 
       t.timestamps

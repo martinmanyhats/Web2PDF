@@ -69,7 +69,7 @@ class Website < ApplicationRecord
 
   def extract(options = {})
     p "!!! Website::extract options #{options.inspect} #{inspect}"
-    get_published_assets unless options[:skiplist].present?
+    Asset.get_published_assets(self) unless options[:skiplist].present?
     p "!!! assets.count #{Asset.count}"
 
     if options[:assetid]
@@ -91,13 +91,13 @@ class Website < ApplicationRecord
   def extract_all
     self.root_webpage = Webpage.find_or_initialize_by(squiz_assetid: "93") do |page|
       page.website = self
-      page.asset_path = ""
+      page.asset_path = "/"
       page.status = "unscraped"
       page.squiz_canonical_url = "#{url}"
       p "!!! page #{page.inspect}"
     end
     p "!!! root_webpage #{root_webpage.inspect}"
-    root_webpage.extract_info_from_document
+    root_webpage.extract_info_from_document(root_webpage.document_for_url(url))
     root_webpage.save!
 
     # Create pages reachable from sitemap.
@@ -117,6 +117,7 @@ class Website < ApplicationRecord
         # return if page_limit && (page_count > page_limit)
       end
     end
+    notify_current_webpage(nil, "scrape complete")
   end
 
   def generate_pdf_files(options)
@@ -253,59 +254,11 @@ class Website < ApplicationRecord
     response.body
   end
 
+  def hostname
+    @_host ||= Addressable::URI.parse(url).host
+  end
+
   private
-
-  def stream_lines_for_url(url)
-    p "!!! stream_lines_for_url #{url}"
-    uri = URI(url)
-    Enumerator.new do |yielder|
-      Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
-        request = Net::HTTP::Get.new(uri)
-        http.request(request) do |response|
-          buffer = ""
-          response.read_body do |chunk|
-            buffer << chunk
-            while (line = buffer.slice!(/.*?\n/)) # yield full lines
-              line = line.chomp.force_encoding(Encoding::ISO_8859_1).encode(Encoding::UTF_8)
-              yielder << line
-            end
-          end
-          # Yield any trailing partial line.
-          yielder << buffer unless buffer.empty?
-        end
-      end
-    end
-  end
-
-  def get_published_assets
-    p "!!! get_published_assets"
-    assets_regex = Regexp.new("tr class=\"squiz_asset\">#{"<td>([^<]*)</td>" * 5}")
-    stream_lines_for_url("#{url}/reports/publishedassets").each do |line|
-      if line =~ /tr class="squiz_asset"/
-        values = line.match(assets_regex)
-        # p "!!! values #{values.inspect}"
-        Rails.logger.silence do
-          Asset.find_or_create_by!(assetid: values[1]) do |asset|
-            asset.asset_type = values[2]
-            asset.name = values[3]
-            asset.short_name = values[4]
-            asset.url = values[5]
-            if asset.url.blank?
-              case asset.asset_type
-              when "MS Word Document"
-                asset.url = "#{url}/__data/assets/word_doc/#{squiz_hash(asset.assetid)}{/#{asset.assetid}/#{asset.name}"
-              when "MS Excel Document"
-                asset.url = "#{url}/__data/assets/excel_doc/#{squiz_hash(asset.assetid)}/#{asset.assetid}/#{asset.name}"
-              else
-                raise "Website:get_published_assets missing url #{asset.inspect}"
-              end
-            end
-            asset.save!
-          end
-        end
-      end
-    end
-  end
 
   def parse_pdf_asset_uri(uri, suffix)
     matches = uri.to_s.match(%r{__data/assets/pdf_file/\d+/(\d+)/(.*\.pdf$)})

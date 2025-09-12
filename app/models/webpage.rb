@@ -35,13 +35,18 @@ class Webpage < ApplicationRecord
     p "!!! Webpage:spider #{inspect}"
     raise "Webpage:spider not unscraped #{inspect}" unless status == "unscraped"
     raise "Webpage:spider missing squiz_assetid #{inspect}" unless squiz_assetid
-    p ">>>>>> Webpage:spider #{squiz_assetid} squiz_canonical_url #{squiz_canonical_url}"
+    p ">>>>>> Webpage:spider #{squiz_assetid}"
     start_at = Time.now
 
-    extract_info_from_document
+    asset = Asset.find_by(assetid: squiz_assetid)
+    raise "Webpage:spider no matching asset #{inspect}" if asset.nil?
+    url = asset.asset_urls.first.url
+
+    extract_info_from_document(document_for_url(url))
 
     if follow_links
-      content_links.each do |link|
+      spiderable_links.each do |link|
+        p "+++++ link #{link}"
         raise "Webpage:spider link not interpolated #{link} in Squiz assetid #{squiz_assetid} (#{squiz_short_name}) #{squiz_canonical_url}" if link.include?("./?a=")
         uri = canonicalise(link)
         link = uri.to_s
@@ -50,18 +55,22 @@ class Webpage < ApplicationRecord
         next unless uri.scheme == "http" || uri.scheme == "https"
         next if uri.path.match?(%r{/(mainmenu|reports|sitemap|sitearchive|testing)})
         next if uri.path.match?(/\.(jpg|jpeg|png|gif|pdf|doc|docx|xls|xlsx|xml|mp3|js|css|rtf|txt)$/i)
-        p "!!! Webpage:spider link #{link} from #{squiz_assetid}"
-        asset = Asset.find_by(url: link)
+        p "!!! Webpage:spider uri #{uri.host}#{uri.path} from #{squiz_assetid}"
+        host_path = "#{uri.host}#{uri.path}"
+        asset = AssetUrl.find_by(url: "#{host_path}")&.asset
         p "!!! Webpage:asset #{asset.inspect}"
         if asset.present?
-          if asset.page?
+          if asset.redirection?
+            p "!!! Webpage:spider redirection #{host_path}"
+            next
+          elsif asset.page?
             create_webpage(asset)
           else
-            p "!!! Webpage:spider asset is not a page #{link}"
+            p "!!! Webpage:spider asset is not a page #{host_path}"
           end
         else
           p "!!! content #{content}"
-          raise "Webpage:spider missing asset for #{link}"
+          raise "Webpage:spider missing asset for #{host_path}"
         end
       end
     end
@@ -83,13 +92,13 @@ class Webpage < ApplicationRecord
 
   def create_webpage(asset)
     p "!!! Webpage:create_webpage asset #{asset.inspect}"
-    webpage = Webpage.find_or_initialize_by(squiz_canonical_url: asset.url) do |newpage|
+    webpage = Webpage.find_or_initialize_by(squiz_assetid: asset.assetid) do |newpage|
       p "========== new Webpage assetid #{asset.assetid}"
       newpage.website = website
       newpage.asset_path = "#{asset_path}/#{"%06d" % asset.assetid}"
       newpage.status = "unscraped"
       newpage.squiz_assetid = asset.assetid
-      p "!!! create_webpage_for_url save #{asset.assetid} #{asset.url}"
+      p "!!! create_webpage save #{asset.assetid}"
       Rails.logger.silence do
         newpage.save!
       end
@@ -115,13 +124,13 @@ class Webpage < ApplicationRecord
     end
   end
 
-  def extract_info_from_document
+  def extract_info_from_document(doc)
     p "!!! extract_info_from_document #{squiz_assetid}"
-    self.squiz_canonical_url = document.css("link[rel=canonical]").first["href"]
-    self.squiz_short_name = document.css("meta[name='squiz-short_name']").first&.attribute("content")&.value
-    self.squiz_updated = DateTime.iso8601(document.css("meta[name='squiz-updated_iso8601']").first&.attribute("content")&.value)
-    self.title = document.css("#newpage-title").first&.text
-    self.content =  document.css("#main-content")&.inner_html
+    self.squiz_canonical_url = doc.css("link[rel=canonical]").first["href"]
+    self.squiz_short_name = doc.css("meta[name='squiz-short_name']").first&.attribute("content")&.value
+    self.squiz_updated = DateTime.iso8601(doc.css("meta[name='squiz-updated_iso8601']").first&.attribute("content")&.value)
+    self.title = doc.css("#newpage-title").first&.text
+    self.content =  doc.css("#main-content")&.inner_html
   end
 
   def generate_html(head)
@@ -144,11 +153,16 @@ class Webpage < ApplicationRecord
 
   def generated_filename_base(assetid = squiz_assetid) = "art-#{"%06d" % assetid}"
 
+  def document_for_url(a_url)
+    p "!!! document_for_url #{a_url}"
+    Nokogiri::HTML(website.content_for_url(canonicalise(a_url)))
+  end
+
   private
 
   def process_links(parsed_content)
-    parsed_content.css("a").each do |element|
-      next if element["href"].blank?
+    parsed_content.css("a[href]").each do |element|
+      next if element["href"].blank? # Faulty links in content.
       uri = canonicalise(element["href"])
       case linked_type(uri)
       when "webpage"
@@ -187,7 +201,13 @@ class Webpage < ApplicationRecord
 
   def canonicalise(string_or_uri)
     # p "!!! canonicalise #{string_or_uri.inspect}"
-    uri = string_or_uri.kind_of?(Addressable::URI) ? string_or_uri : Addressable::URI.parse(string_or_uri.strip)
+    uri = if string_or_uri.kind_of?(String)
+            string_or_uri = string_or_uri.strip
+            string_or_uri = "https://#{string_or_uri}" unless string_or_uri =~ /^https?:\/\//
+            Addressable::URI.parse(string_or_uri)
+          else
+            string_or_uri
+    end
     return uri if uri.scheme == "mailto"
     website_host = Addressable::URI.parse(website.url).host
     if uri.host.blank?
@@ -206,11 +226,12 @@ class Webpage < ApplicationRecord
     end
     uri.fragment = nil
     uri.query = nil
+    # p "!!! canonicalise result #{uri.inspect}"
     uri
   end
 
-  def content_links
-    Nokogiri::HTML(content).css("a").map { |a| a.attribute("href").to_s.strip }.compact
+  def spiderable_links
+    Nokogiri::HTML(content).css("a[href]").select { |a| !a["href"].include?("#") }.map { |a| a.attribute("href").to_s.strip }.compact
   end
 
   def linked_type(url)
@@ -259,11 +280,6 @@ class Webpage < ApplicationRecord
 
   def document
     @_document ||= document_for_url(squiz_canonical_url)
-  end
-
-  def document_for_url(a_url)
-    p "!!! document_for_url #{a_url}"
-    Nokogiri::HTML(website.content_for_url(canonicalise(a_url)))
   end
 
   def header_html

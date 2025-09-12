@@ -10,18 +10,25 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_09_01_100450) do
+ActiveRecord::Schema[8.0].define(version: 2025_09_05_094131) do
+  create_table "asset_urls", force: :cascade do |t|
+    t.string "url"
+    t.integer "asset_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["asset_id"], name: "index_asset_urls_on_asset_id"
+    t.index ["url"], name: "index_asset_urls_on_url", unique: true
+  end
+
   create_table "assets", force: :cascade do |t|
     t.integer "assetid", null: false
     t.string "asset_type", null: false
     t.string "name", null: false
     t.string "short_name", null: false
-    t.string "url"
     t.string "digest"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["assetid"], name: "index_assets_on_assetid", unique: true
-    t.index ["url"], name: "index_assets_on_url", unique: true
   end
 
   create_table "pdfs", force: :cascade do |t|
@@ -81,6 +88,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_01_100450) do
     t.index ["root_webpage_id"], name: "index_websites_on_root_webpage_id"
   end
 
+  add_foreign_key "asset_urls", "assets"
   add_foreign_key "pdfs", "websites"
   add_foreign_key "webpages", "websites"
   add_foreign_key "websites", "webpages", column: "root_webpage_id"

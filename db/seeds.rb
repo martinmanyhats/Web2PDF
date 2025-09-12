@@ -17,8 +17,8 @@ website = Website.create(name: "Deddington History",
 
 # These assets don't get listed in Published Assets for some reason, possibly because they were previously Type 2 linked?
 now = DateTime.now
-Asset.create(assetid: 93, asset_type: "Asset Listing Page", name: "Home", short_name: "Home", url: "https://www.deddingtonhistory.uk/history", created_at: now, updated_at: now)
-Asset.create(assetid: 121, asset_type: "Standard Page", name: "About DOL", short_name: "About DOL", url: "https://www.deddingtonhistory.uk/about", created_at: now, updated_at: now)
-Asset.create(assetid: 415, asset_type: "Standard Page", name: "Disclaimer", short_name: "Disclaimer", url: "https://www.deddingtonhistory.uk/disclaimer", created_at: now, updated_at: now)
-Asset.create(assetid: 419, asset_type: "Standard Page", name: "Feedback", short_name: "Feedback", url: "https://www.deddingtonhistory.uk/feedback", created_at: now, updated_at: now)
-Asset.create(assetid: 9658, asset_type: "Standard Page", name: "Privacy Policy", short_name: "Privacy Policy", url: "https://www.deddingtonhistory.uk/privacy", created_at: now, updated_at: now)
+Asset.create(assetid: 93, asset_type: "Asset Listing Page", name: "Home", short_name: "Home", asset_urls: [AssetUrl.create(url: "www.deddingtonhistory.uk/history")], created_at: now, updated_at: now)
+Asset.create(assetid: 121, asset_type: "Standard Page", name: "About DOL", short_name: "About DOL", asset_urls: [AssetUrl.create(url: "www.deddingtonhistory.uk/about")], created_at: now, updated_at: now)
+Asset.create(assetid: 415, asset_type: "Standard Page", name: "Disclaimer", short_name: "Disclaimer", asset_urls: [AssetUrl.create(url: "www.deddingtonhistory.uk/disclaimer")], created_at: now, updated_at: now)
+Asset.create(assetid: 419, asset_type: "Standard Page", name: "Feedback", short_name: "Feedback", asset_urls: [AssetUrl.create(url: "www.deddingtonhistory.uk/feedback")], created_at: now, updated_at: now)
+#Asset.create(assetid: 9658, asset_type: "Standard Page", name: "Privacy Policy", short_name: "Privacy Policy", asset_urls: [AssetUrl.create(url: "www.deddingtonhistory.uk/privacy")], created_at: now, updated_at: now)
