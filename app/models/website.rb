@@ -8,6 +8,8 @@ class Website < ApplicationRecord
   attr_reader :webroot
   attr_reader :pdfs_by_filename
 
+  DataAsset = Struct.new(:assetid, :short_name, :filename, :url, :digest)
+
   def scrape(options = {})
     p "!!! Website::spider options #{options.inspect} #{inspect}"
     if options[:assetid]
@@ -207,7 +209,7 @@ class Website < ApplicationRecord
   def add_pdf_uri(uri)
     p "!!! add_pdf_uri uri #{uri}"
     raise "Website:add_pdf_uri blank" if uri.blank?
-    parse_pdf_asset_uri(uri)
+    # parse_data_asset_uri(uri, "pdf")
     @pdf_uris << uri
     p "!!! add_pdf_uri @pdf_uris.size #{@pdf_uris.size}"
   end
@@ -217,26 +219,22 @@ class Website < ApplicationRecord
     p "!!! @pdf_uris.count #{@pdf_uris.count}"
     @pdf_uris.each do |uri|
       p "!!! generate_pdf_asset uri #{uri}"
-      (pdf_assetid, pdf_filename) = parse_pdf_asset_uri(uri)
+      (pdf_assetid, pdf_filename) = parse_data_asset_uri(uri, "pdf")
       filename = "/tmp/dh/pdf-#{"%06d" % pdf_assetid}-#{pdf_filename}"
       IO.copy_stream(URI.open(uri), filename)
-      if options.has_key?(:digest)
-        @pdf_assetid_by_digest ||= {}
-        digest = get_digest(url)
-        @pdf_assetid_by_digest[digest] = pdf_assetid
-      end
     end
   end
 
   def generate_pdf_toc(options)
-    p "!!! generate_pdf_toc size #{@pdf_uris.size}"
-    get_pdf_list(options)
+    p "!!! generate_pdf_toc @pdf_uris.size #{@pdf_uris.size}"
+    get_squiz_pdf_list(options)
+    p "!!! generate_pdf_toc @pdfs_by_filename.size #{@pdfs_by_filename.size}"
     File.open("/tmp/dh/toc-pdfs.html", "w") do |file|
-      file.write("<html>\n#{html_head}\n<content_for_url>\n<h1>PDF TOC</h1><table>\n")
+      file.write("<html>\n#{html_head}\n<h1>PDF TOC</h1><table>\n")
       @pdfs_by_filename.each_key.sort do |filename|
         file.write("<tr><td><a href='#{filename}'>#{filename}</a></td></tr>\n")
       end
-      file.write("</table>\n</content_for_url>\n</html>\n")
+      file.write("</table>\n</html>\n")
       file.close
     end
   end
@@ -260,9 +258,9 @@ class Website < ApplicationRecord
 
   private
 
-  def parse_pdf_asset_uri(uri, suffix)
-    matches = uri.to_s.match(%r{__data/assets/pdf_file/\d+/(\d+)/(.*\.pdf$)})
-    raise "Website:parse_data_asset_uri cannot parse uri #{uri}" if matches.nil?
+  def parse_data_asset_uri(uri, suffix)
+    matches = uri.to_s.match(%r{__data/assets/#{suffix}_file/\d+/(\d+)/(.*\.#{suffix}$)})
+    raise "Website:parse_data_asset_uri cannot parse uri #{uri} suffix #{suffix}" if matches.nil?
     matches.captures
   end
 
@@ -320,35 +318,45 @@ class Website < ApplicationRecord
     @_html_head ||= File.read(File.join(Rails.root, 'config', 'website_head.html'))
   end
 
-  def get_pdf_list(options)
-    p "!!! get_pdf_list otions #{options.inspect}"
+  def get_squiz_pdf_list(options)
+    p "!!! get_squiz_pdf_list otions #{options.inspect}"
     report = Nokogiri::HTML(URI.open("#{url}/reports/allpdfs"))
     pdfs = report.css("[id='allpdfs'] tr")
-    p "!!! get_pdf_list size #{pdfs.size}"
+    p "!!! get_squiz_pdf_list size #{pdfs.size}"
     @pdfs_by_filename = {}
-    pdfs.map do |pdf|
-      (assetid, short_name, filename, url)  = pdf.css("td").map(&:text)
-      p "!!! get_pdf_list assetid #{assetid} filename #{filename}"
+    @pdfs_by_digest = {}
+    pdfs.each do |pdf|
+      (assetid, short_name, filename, url) = pdf.css("td").map(&:text)
+      digest = nil
+      p "!!! get_squiz_pdf_list assetid #{assetid} filename #{filename}"
+      filename_duplicate = false
       if @pdfs_by_filename.has_key?(filename)
-        duplicate = @pdfs_by_filename[filename]
-        p "!!! DUPLICATE filename #{filename} assetid #{duplicate.assetid}:#{assetid} short_name #{duplicate.short_name}:#{short_name}"
-        log_to_file("tmp/pdf_duplicates", "FILENAME #{filename} assetids #{duplicate.assetid}:#{assetid} short_names #{duplicate.short_name}:#{short_name}")
+        existing = @pdfs_by_filename[filename]
+        p ">>> FILENAME assetids #{existing.assetid}:#{assetid} short names #{existing.short_name}:#{short_name} filename #{filename} "
+        existing.digest = get_digest(existing.url) unless existing.digest
+        digest = get_digest(url)
+        filename_duplicate = true
+        log(:pdf_duplicates, "FILENAME assetids #{existing.assetid}:#{assetid}   short names #{existing.short_name}:#{short_name}   filename #{filename}  #{digest != existing.digest ? "  CONTENTS DIFFER" : ""}")
+        asset = existing
+      else
+        asset = DataAsset.new(assetid: assetid.to_i, short_name: short_name, filename: filename, url: url, digest: digest)
+        @pdfs_by_filename[filename] = asset
       end
       if options.has_key?(:digest)
-        digest = get_digest(url)
-        if @pdf_assetid_by_digest.has_key?(digest)
-          p " >>> DIGEST url #{url} assetid #{@pdf_assetid_by_digest[digest]}"
-          log_to_file("tmp/pdf_duplicates", "DIGEST assetids #{assetid}:#{@pdf_assetid_by_digest[digest]}")
+        digest = get_digest(url) unless digest
+        if @pdfs_by_digest.has_key?(digest) && !filename_duplicate
+          existing = @pdfs_by_digest[digest]
+          p " >>> CONTENT url #{url} asset #{@pdfs_by_digest[digest]}"
+          log(:pdf_duplicates, "CONTENT assetids #{existing.assetid}:#{assetid}   short names #{existing.short_name}:#{short_name}   filenames #{filename}:#{existing.filename}")
+        else
+          asset.digest = digest
+          @pdfs_by_digest[digest] = asset
         end
       end
-      @pdfs_by_filename[filename] = Asset.new(assetid: assetid.to_i, short_name: short_name, filename: filename, digest: digest)
     end
-    @pdf_uris.map do |uri|
-      unless @pdfs_by_filename.has_key?(File.basename(uri.to_s))
-        # raise "Website:get_pdf_list unknown filename #{filename}"
-      end
+    @pdf_uris.each do |uri|
+      raise "Website:get_squiz_pdf_list unknown filename #{filename}" unless @pdfs_by_filename.has_key?(File.basename(uri.to_s))
     end
-    p "!!! size #{@pdfs_by_filename.keys.size} uniq #{@pdfs_by_filename.each_key.sort.uniq.size}"
   end
 
   def notify_current_webpage(webpage, notice="NONE")
@@ -378,6 +386,25 @@ class Website < ApplicationRecord
       digest = Digest::MD5.hexdigest(pdf_content)
     end
     digest
+  end
+
+  def log(name, message)
+    @logs_created ||= {}
+    log_filename = case name
+                   when :pdf_duplicates
+                     "tmp/pdf_duplicates"
+                   else
+                     raise "Website:log unknown name #{name}"
+                   end
+    p "!!! log #{log_filename} @log_created.has_key?(log_filename) #{@logs_created.has_key?(log_filename)}"
+    unless @logs_created.has_key?(log_filename)
+      File.open(log_filename, "w") do |file|
+        p "!!! Website:log created #{log_filename}"
+        file.puts("Log created #{DateTime.now.iso8601}")
+        @logs_created[log_filename] = true
+      end
+    end
+    File.open(log_filename, "a") { |file| file.puts(message)}
   end
 
   def log_to_file(filename, message)
