@@ -5,7 +5,6 @@ Rails.application.routes.draw do
   resources :users
   resources :websites do
     member do
-      get "extract"
       get "spider"
       get "generate_pdf"
     end

@@ -4,7 +4,7 @@
     %li
       Pages: #{website.webpages.count}
     %li
-      Unscraped: #{website.webpages.where(status: "unscraped").count}
+      Unspidered: #{website.webpages.where(status: "unspidered").count}
     - if webpage.present?
       %li
         URL: #{webpage.squiz_canonical_url}

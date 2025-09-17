@@ -21,6 +21,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_05_094131) do
   end
 
   create_table "assets", force: :cascade do |t|
+    t.integer "website_id", null: false
     t.integer "assetid", null: false
     t.string "asset_type", null: false
     t.string "name", null: false
@@ -29,6 +30,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_05_094131) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["assetid"], name: "index_assets_on_assetid", unique: true
+    t.index ["website_id"], name: "index_assets_on_website_id"
   end
 
   create_table "pdfs", force: :cascade do |t|
@@ -53,20 +55,20 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_05_094131) do
 
   create_table "webpages", force: :cascade do |t|
     t.integer "website_id", null: false
+    t.integer "asset_id", null: false
     t.string "title", default: "-"
     t.string "asset_path", null: false
     t.string "status", null: false
-    t.float "scrape_duration"
+    t.float "spider_duration"
     t.string "content"
     t.string "checksum"
     t.string "squiz_canonical_url"
-    t.integer "squiz_assetid"
     t.string "squiz_short_name"
     t.datetime "squiz_updated"
     t.string "squiz_breadcrumbs"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["squiz_assetid"], name: "index_webpages_on_squiz_assetid"
+    t.index ["asset_id"], name: "index_webpages_on_asset_id"
     t.index ["squiz_canonical_url"], name: "index_webpages_on_squiz_canonical_url"
     t.index ["website_id"], name: "index_webpages_on_website_id"
   end
@@ -89,7 +91,9 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_05_094131) do
   end
 
   add_foreign_key "asset_urls", "assets"
+  add_foreign_key "assets", "websites"
   add_foreign_key "pdfs", "websites"
+  add_foreign_key "webpages", "assets"
   add_foreign_key "webpages", "websites"
   add_foreign_key "websites", "webpages", column: "root_webpage_id"
 end

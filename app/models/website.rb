@@ -1,4 +1,5 @@
 class Website < ApplicationRecord
+  has_many :assets, dependent: :destroy
   has_many :webpages, dependent: :destroy
   has_one :root_webpage, class_name: "Webpage", dependent: nil
 
@@ -10,122 +11,62 @@ class Website < ApplicationRecord
 
   DataAsset = Struct.new(:assetid, :short_name, :filename, :url, :digest)
 
-  def scrape(options = {})
+  def spider(options = {})
     p "!!! Website::spider options #{options.inspect} #{inspect}"
+    Asset.get_published_assets(self) unless options[:skipassets].present?
     if options[:assetid]
-      scrape_one(options[:assetid].to_i)
+      spider_one(options[:assetid].to_i)
     else
-      scrape_all
+      spider_all
     end
     notify_page_list
   end
 
-  def scrape_one(assetid)
-    p "!!! scrape_one assetid #{assetid}"
+  def spider_one(assetid)
+    p "!!! spider_one assetid #{assetid}"
     webpage = webpages.find_sole_by(squiz_assetid: assetid)
-    notify_current_webpage(webpage, "scraping")
-    webpage.status = "unscraped"
+    notify_current_webpage(webpage, "spidering")
+    webpage.status = "unspidered"
     webpage.spider(follow_links: false)
   end
 
-  def scrape_all
-    self.root_webpage = Webpage.find_or_initialize_by(squiz_assetid: "93") do |page|
+  def spider_all
+    root_asset = Asset.find_sole_by(assetid: 93)
+    self.root_webpage = Webpage.find_or_initialize_by(asset: root_asset) do |page|
       page.website = self
-      page.asset_path = ""
-      page.status = "unscraped"
+      page.asset = root_asset
+      page.asset_path = "/#{"%06d" % root_asset.assetid}"
+      page.status = "unspidered"
       page.squiz_canonical_url = "#{url}"
-      p "!!! page #{page.inspect}"
     end
-    p "!!! root_webpage #{root_webpage.inspect}"
     root_webpage.extract_info_from_document
-    root_webpage.save!
+    p "!!! root_webpage saving #{root_webpage.inspect}"
+    Rails.logger.silence do
+      root_webpage.save!
+    end
 
     # Create pages reachable from sitemap.
     # spider_sitemap
 
-    # Loop until all pages are scraped.
-    page_count = 0
+    # Loop until all pages are spidered.
     loop do
-      unscraped_webpages = webpages.where(status: "unscraped").order(:id)
+      unscraped_webpages = webpages.where(status: "unspidered").order(:id)
       p "!!! Website::spider unscraped_webpages.count #{unscraped_webpages.count}"
       break if unscraped_webpages.empty?
       unscraped_webpages.each do |webpage|
-        notify_current_webpage(webpage, "scraping")
+        notify_current_webpage(webpage, "spidering")
         webpage.spider(follow_links: true)
-        page_count += 1
-        # p ">>> page_limit #{page_limit} page_count #{page_count} if #{page_limit && (page_count > page_limit)}"
-        # return if page_limit && (page_count > page_limit)
       end
     end
   end
 
-  class XXPublishedAssetsDocument < Nokogiri::XML::SAX::Document
-    def start_element(name, attrs = [])
-      p "!!! start_element #{name}"
-    end
-
-    def end_element(name)
-      p "!!! end_element #{name}"
-    end
-  end
-
-  def extract(options = {})
-    p "!!! Website::extract options #{options.inspect} #{inspect}"
-    Asset.get_published_assets(self) unless options[:skiplist].present?
-    p "!!! assets.count #{Asset.count}"
-
-    if options[:assetid]
-      extract_one(options[:assetid].to_i)
-    else
-      extract_all
-    end
-    notify_page_list
-  end
-
-  def extract_one(assetid)
-    p "!!! extract_one assetid #{assetid}"
-    webpage = webpages.find_sole_by(squiz_assetid: assetid)
-    notify_current_webpage(webpage, "scraping")
-    webpage.status = "unscraped"
-    webpage.spider(follow_links: false)
-  end
-
-  def extract_all
-    self.root_webpage = Webpage.find_or_initialize_by(squiz_assetid: "93") do |page|
-      page.website = self
-      page.asset_path = "/"
-      page.status = "unscraped"
-      page.squiz_canonical_url = "#{url}"
-      p "!!! page #{page.inspect}"
-    end
-    p "!!! root_webpage #{root_webpage.inspect}"
-    root_webpage.extract_info_from_document(root_webpage.document_for_url(url))
-    root_webpage.save!
-
-    # Create pages reachable from sitemap.
-    # spider_sitemap
-
-    # Loop until all pages are scraped.
-    page_count = 0
-    loop do
-      unscraped_webpages = webpages.where(status: "unscraped").order(:id)
-      p "!!! Website::spider unscraped_webpages.count #{unscraped_webpages.count}"
-      break if unscraped_webpages.empty?
-      unscraped_webpages.each do |webpage|
-        notify_current_webpage(webpage, "scraping")
-        webpage.spider(follow_links: true)
-        page_count += 1
-        # p ">>> page_limit #{page_limit} page_count #{page_count} if #{page_limit && (page_count > page_limit)}"
-        # return if page_limit && (page_count > page_limit)
-      end
-    end
-    notify_current_webpage(nil, "scrape complete")
-  end
-
-  def generate_pdf_files(options)
+  def generate_archive(options)
+    p "!!! Website:generate_archive options #{options.inspect}"
+    dir = "/tmp/dh"
+    FileUtils.remove_entry_secure(dir) if File.exist?(dir)
+    %w[html pdf image].each {|subdir| FileUtils.mkdir_p("#{dir}/#{subdir}")}
     @pdf_uris = Set.new
-    p "!!! Website:generate_pdf_files options #{options.inspect}"
-    FileUtils.mkdir_p("/tmp/dh")
+    @image_uris = Set.new
     browser = Ferrum::Browser.new(
       browser_options: {
         "generate-pdf-document-outline": true
@@ -139,12 +80,11 @@ class Website < ApplicationRecord
     if options[:assetid].present?
       pages = webpages.where(squiz_assetid: options[:assetid])
     else
-      pages = webpages.where(status: "scraped")
+      pages = webpages.where(status: "spidered")
     end
-    p "!!! Website:generate_pdf_files count #{pages.count}"
-    @pdf_uris = []
+    p "!!! Website:generate_archive count #{pages.count}"
     pages.each do |webpage|
-      p "========== Website:generate_pdf_files assetid #{webpage.squiz_assetid}"
+      p "========== Website:generate_archive assetid #{webpage.squiz_assetid}"
       html_filename = webpage.generate_html(html_head)
       page = browser.create_page
       page.go_to("file://#{html_filename}")
@@ -160,46 +100,9 @@ class Website < ApplicationRecord
     generate_pdf_toc(options)
   end
 
-  def XXgenerate_pdfs
-    scraped_pages = Webpage.where(status: "scraped")
-    root_pdf_filename = root_webpage.generate_pdf
-    pdf_filenames = scraped_pages.map do |page|
-      page.generate_pdf unless page == root_webpage
-    end.compact
-    pdf_filenames.insert(0, root_pdf_filename)
-    p "!!! pdf_filenames #{pdf_filenames.inspect}"
-    pdf_filenames
-  end
-
-  def XXgenerate_pdf
-    p "!!! Website::generate_pdf"
-    File.open("/tmp/dh.html", "wb") do |file|
-      head = File.read(File.join(Rails.root, 'config', 'website_head.html'))
-      file.write("<html>\n#{head}\n<content_for_url>\n")
-      webpages.where(status: "scraped").each { |page| page.generate_html(file) }
-      file.write("</content_for_url>\n</html>\n")
-      file.close
-      browser = Ferrum::Browser.new(
-        browser_options: {
-          "generate-pdf-document-outline": true
-        }
-      )
-      page = browser.create_page
-      page.go_to("file:///tmp/dh.html")
-      page.pdf(
-        path: "/tmp/dh.pdf",
-        landscape: true,
-        format: :A4,
-        timeout: 900
-      )
-      browser.reset
-      browser.quit
-    end
-  end
-
-  def url_internal?(url2)
-    # p "!!! url #{url} url2 #{url2} #{url2.starts_with?(url)}"
-    url2.starts_with?(url)
+  def internal?(url_or_uri)
+    uri = url_or_uri.kind_of?(String) ? URI.parse(url_or_uri) : url_or_uri
+    uri.host == host
   end
 
   def host
@@ -209,9 +112,13 @@ class Website < ApplicationRecord
   def add_pdf_uri(uri)
     p "!!! add_pdf_uri uri #{uri}"
     raise "Website:add_pdf_uri blank" if uri.blank?
-    # parse_data_asset_uri(uri, "pdf")
     @pdf_uris << uri
-    p "!!! add_pdf_uri @pdf_uris.size #{@pdf_uris.size}"
+  end
+
+  def add_image_uri(uri)
+    p "!!! add_image_uri uri #{uri}"
+    raise "Website:add_image_uri blank" if uri.blank?
+    @image_uris << uri
   end
 
   def generate_pdf_assets(options)
@@ -239,12 +146,10 @@ class Website < ApplicationRecord
     end
   end
 
-  def content_for_url(a_url)
+  def XXcontent_for_url(a_url)
     # p "!!! Website:content_for_url url #{a_url}"
     response = HTTParty.get(a_url, {
-      headers: {
-        "User-Agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"
-      },
+      headers: Website.http_headers,
     })
     # TODO: error checking, retry
     # p "!!! Website:content_for_url headers #{response.headers}"
@@ -254,6 +159,12 @@ class Website < ApplicationRecord
 
   def hostname
     @_host ||= Addressable::URI.parse(url).host
+  end
+
+  def self.http_headers
+    {
+      "User-Agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"
+    }
   end
 
   private
@@ -320,12 +231,12 @@ class Website < ApplicationRecord
 
   def get_squiz_pdf_list(options)
     p "!!! get_squiz_pdf_list otions #{options.inspect}"
-    report = Nokogiri::HTML(URI.open("#{url}/reports/allpdfs"))
+    report = Nokogiri::HTML(URI.open("#{url}/reports/allpdfs/_recache"))
     pdfs = report.css("[id='allpdfs'] tr")
     p "!!! get_squiz_pdf_list size #{pdfs.size}"
     @pdfs_by_filename = {}
     @pdfs_by_digest = {}
-    pdfs.each do |pdf|
+    pdfs.first(5).each do |pdf|
       (assetid, short_name, filename, url) = pdf.css("td").map(&:text)
       digest = nil
       p "!!! get_squiz_pdf_list assetid #{assetid} filename #{filename}"
@@ -354,7 +265,7 @@ class Website < ApplicationRecord
         end
       end
     end
-    @pdf_uris.each do |uri|
+    false && @pdf_uris.each do |uri|
       raise "Website:get_squiz_pdf_list unknown filename #{filename}" unless @pdfs_by_filename.has_key?(File.basename(uri.to_s))
     end
   end

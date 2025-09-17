@@ -1,7 +1,6 @@
 class Webpage < ApplicationRecord
   belongs_to :website
-  # belongs_to :parent, class_name: "Webpage", optional: true
-  # has_many :children, class_name: "Webpage", foreign_key: :parent_id, dependent: :destroy
+  belongs_to :asset
 
   PAGE_NOT_FOUND_SQUIZ_ASSETID = "13267"
 
@@ -12,9 +11,7 @@ class Webpage < ApplicationRecord
       # p "!!! Webpage:local_html? url #{url}"
       headers = HTTParty.head(url, {
         follow_redirects: false,
-        headers: {
-          "User-Agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"
-        },
+        headers: Website.http_headers,
       })
       if headers.response.is_a?(Net::HTTPSuccess)
         return headers["content-type"].starts_with?("text/html")
@@ -33,58 +30,58 @@ class Webpage < ApplicationRecord
 
   def spider(follow_links: true)
     p "!!! Webpage:spider #{inspect}"
-    raise "Webpage:spider not unscraped #{inspect}" unless status == "unscraped"
-    raise "Webpage:spider missing squiz_assetid #{inspect}" unless squiz_assetid
-    p ">>>>>> Webpage:spider #{squiz_assetid}"
-    start_at = Time.now
+    raise "Webpage:spider not unspidered #{inspect}" unless status == "unspidered"
+    raise "Webpage:spider missing asset #{inspect}" if asset.nil?
+    p ">>>>>> Webpage:spider #{asset.assetid}"
 
-    asset = Asset.find_by(assetid: squiz_assetid)
-    raise "Webpage:spider no matching asset #{inspect}" if asset.nil?
+    start_at = Time.now
     url = asset.asset_urls.first.url
 
-    extract_info_from_document(document_for_url(url))
+    extract_info(asset.document)
 
     if follow_links
-      spiderable_links.each do |link|
+      spiderable_links(Nokogiri::HTML(content)).each do |link|
         p "+++++ link #{link}"
-        raise "Webpage:spider link not interpolated #{link} in Squiz assetid #{squiz_assetid} (#{squiz_short_name}) #{squiz_canonical_url}" if link.include?("./?a=")
+        raise "Webpage:spider link not interpolated #{link} in assetid #{asset.assetid} (#{squiz_short_name}) #{squiz_canonical_url}" if link.include?("./?a=")
         uri = canonicalise(link)
-        link = uri.to_s
         next if uri.host != website.host
         next if uri.path.blank?
         next unless uri.scheme == "http" || uri.scheme == "https"
         next if uri.path.match?(%r{/(mainmenu|reports|sitemap|sitearchive|testing)})
         next if uri.path.match?(/\.(jpg|jpeg|png|gif|pdf|doc|docx|xls|xlsx|xml|mp3|js|css|rtf|txt)$/i)
-        p "!!! Webpage:spider uri #{uri.host}#{uri.path} from #{squiz_assetid}"
+        p "!!! Webpage:spider uri #{uri.host}#{uri.path} from #{asset.assetid}"
         host_path = "#{uri.host}#{uri.path}"
-        asset = AssetUrl.find_by(url: "#{host_path}")&.asset
-        p "!!! Webpage:asset #{asset.inspect}"
-        if asset.present?
-          if asset.redirection?
+        linked_asset = Asset.asset_for_url(host_path)
+        p "!!! Webpage:asset #{linked_asset.inspect}"
+        if linked_asset.present?
+          if linked_asset.content_page?
+            create_webpage(linked_asset)
+          elsif linked_asset.redirection?
             p "!!! Webpage:spider redirection #{host_path}"
-            next
-          elsif asset.page?
-            create_webpage(asset)
+            if website.internal?(url) && (linked_asset = Asset.asset_for_redirection(uri))
+              create_webpage(linked_asset)
+            end
           else
             p "!!! Webpage:spider asset is not a page #{host_path}"
           end
         else
-          p "!!! content #{content}"
-          raise "Webpage:spider missing asset for #{host_path}"
+          # Ignore problems with links in Google Sheets.
+          next if asset.asset_type == "DOL Google Sheet viewer"
+          raise "Webpage:spider missing asset for #{host_path} webpage #{inspect}"
         end
       end
     end
 
     false && if squiz_short_name.blank?
-      page_title = document.css("#newpage-title").first&.text
+      page_title = asset.document.css("#newpage-title").first&.text
       self.title = page_title.blank? ? "--" : page_title
     else
       self.title = squiz_short_name
     end
 
-    self.scrape_duration = (Time.now - start_at).seconds
-    self.status = "scraped"
-    p "!!! Webpage:spider save #{squiz_assetid}"
+    self.spider_duration = (Time.now - start_at).seconds
+    self.status = "spidered"
+    p "!!! Webpage:spider save #{asset.assetid}"
     Rails.logger.silence do
       save!
     end
@@ -92,12 +89,12 @@ class Webpage < ApplicationRecord
 
   def create_webpage(asset)
     p "!!! Webpage:create_webpage asset #{asset.inspect}"
-    webpage = Webpage.find_or_initialize_by(squiz_assetid: asset.assetid) do |newpage|
+    webpage = Webpage.find_or_initialize_by(asset_id: asset.id) do |newpage|
       p "========== new Webpage assetid #{asset.assetid}"
       newpage.website = website
       newpage.asset_path = "#{asset_path}/#{"%06d" % asset.assetid}"
-      newpage.status = "unscraped"
-      newpage.squiz_assetid = asset.assetid
+      newpage.status = "unspidered"
+      newpage.asset = asset
       p "!!! create_webpage save #{asset.assetid}"
       Rails.logger.silence do
         newpage.save!
@@ -105,43 +102,19 @@ class Webpage < ApplicationRecord
     end
   end
 
-  def create_webpage_for_url(a_url)
-    p "!!! Webpage:create_webpage_for_url a_url #{a_url}"
-    doc = document_for_url(a_url)
-    assetid = doc.css("meta[name='squiz-assetid']").first&.attribute("content")&.value&.to_i
-    if assetid
-      webpage = Webpage.find_or_initialize_by(squiz_assetid: assetid) do |newpage|
-        p "!!!!!!!!!! new Webpage assetid #{assetid}"
-        newpage.website = website
-        newpage.asset_path = "#{asset_path}/#{"%06d" % assetid}"
-        newpage.status = "unscraped"
-        newpage.squiz_canonical_url = doc.css("link[rel=canonical]").first["href"]
-      end
-      p "!!! create_webpage_for_url save #{assetid} #{a_url}"
-      Rails.logger.silence do
-        webpage.save!
-      end
-    end
-  end
-
-  def extract_info_from_document(doc)
-    p "!!! extract_info_from_document #{squiz_assetid}"
-    self.squiz_canonical_url = doc.css("link[rel=canonical]").first["href"]
-    self.squiz_short_name = doc.css("meta[name='squiz-short_name']").first&.attribute("content")&.value
-    self.squiz_updated = DateTime.iso8601(doc.css("meta[name='squiz-updated_iso8601']").first&.attribute("content")&.value)
-    self.title = doc.css("#newpage-title").first&.text
-    self.content =  doc.css("#main-content")&.inner_html
+  def extract_info_from_document
+    extract_info(asset.document)
   end
 
   def generate_html(head)
-    raise "Webpage:generate_html not scraped id #{id}" if status != "scraped"
+    raise "Webpage:generate_html not spidered id #{id}" if status != "spidered"
     filename = generated_filename("html")
     File.open(filename, "wb") do |file|
       file.write("<html>\n#{head}\n<content_for_url>\n")
       parsed_content = Nokogiri::HTML(content)
       process_links(parsed_content)
       # process_images(parsed_content)
-      file.write("<div id='webpage-#{"%06d" % squiz_assetid}'>#{header_html}#{parsed_content.to_html}</div>")
+      file.write("<div id='webpage-#{"%06d" % asset.assetid}'>#{header_html}#{parsed_content.to_html}</div>")
       file.write("</content_for_url>\n</html>\n")
       file.close
       return filename
@@ -149,31 +122,41 @@ class Webpage < ApplicationRecord
     raise "Webpage:generate_html unable to create #{filename}"
   end
 
-  def generated_filename(suffix, assetid = squiz_assetid) = "/tmp/dh/#{generated_filename_base(assetid)}.#{suffix}"
+  def generated_filename(suffix, assetid = asset.assetid) = "/tmp/dh/#{suffix}/#{generated_filename_base(assetid)}.#{suffix}"
 
-  def generated_filename_base(assetid = squiz_assetid) = "art-#{"%06d" % assetid}"
+  def generated_filename_base(assetid = asset.assetid) = "art-#{"%06d" % assetid}"
 
-  def document_for_url(a_url)
+  def XXdocument_for_url(a_url)
     p "!!! document_for_url #{a_url}"
     Nokogiri::HTML(website.content_for_url(canonicalise(a_url)))
   end
 
   private
 
+  def extract_info(doc)
+    p "!!! extract_info assetid #{asset.assetid}"
+    self.squiz_canonical_url = doc.css("link[rel=canonical]").first["href"]
+    self.squiz_short_name = doc.css("meta[name='squiz-short_name']").first&.attribute("content")&.value
+    self.squiz_updated = DateTime.iso8601(doc.css("meta[name='squiz-updated_iso8601']").first&.attribute("content")&.value)
+    self.title = doc.css("#newpage-title").first&.text
+    self.content =  doc.css("#main-content")&.inner_html
+  end
+
   def process_links(parsed_content)
-    parsed_content.css("a[href]").each do |element|
-      next if element["href"].blank? # Faulty links in content.
-      uri = canonicalise(element["href"])
+    spiderable_links(parsed_content).each do |link|
+      next if link.blank? # Faulty links in content.
+      uri = canonicalise(link)
       case linked_type(uri)
       when "webpage"
-        dest_page = Webpage.find_sole_by(squiz_canonical_url: uri.to_s)
+        p "!!! webpage uri #{uri}"
+        dest_page = Webpage.find_by(squiz_canonical_url: uri.to_s)
+        raise "Webpage:process_links cannot find #{uri.to_s}" unless dest_page
         p "!!! internally linking to #{uri.to_s} {#{dest_page.squiz_short_name}"
         element.attributes["href"].value = "#{website.webroot}/#{generated_filename_base(dest_page.squiz_assetid)}.pdf"
       when "pdf"
-        p "!!! PDF"
         website.add_pdf_uri(uri)
       when "image"
-        p "!!! IMAGE"
+        website.add_image_uri(uri)
       else
         p "!!! ignore #{uri.to_s}"
         next
@@ -199,14 +182,14 @@ class Webpage < ApplicationRecord
     end
   end
 
-  def canonicalise(string_or_uri)
-    # p "!!! canonicalise #{string_or_uri.inspect}"
-    uri = if string_or_uri.kind_of?(String)
-            string_or_uri = string_or_uri.strip
-            string_or_uri = "https://#{string_or_uri}" unless string_or_uri =~ /^https?:\/\//
-            Addressable::URI.parse(string_or_uri)
+  def canonicalise(url_or_uri)
+    # p "!!! canonicalise #{url_or_uri.inspect}"
+    uri = if url_or_uri.kind_of?(String)
+            url_or_uri = url_or_uri.strip
+            url_or_uri = "https://#{url_or_uri}" unless url_or_uri =~ /^https?:\/\//
+            Addressable::URI.parse(url_or_uri)
           else
-            string_or_uri
+            url_or_uri
     end
     return uri if uri.scheme == "mailto"
     website_host = Addressable::URI.parse(website.url).host
@@ -230,8 +213,17 @@ class Webpage < ApplicationRecord
     uri
   end
 
-  def spiderable_links
-    Nokogiri::HTML(content).css("a[href]").select { |a| !a["href"].include?("#") }.map { |a| a.attribute("href").to_s.strip }.compact
+  def spiderable_links(parsed_content)
+    # Skip anchors and links with same page.
+    parsed_content.css("a[href]")
+                  .select { |a| !a["href"].start_with?("#") }
+                  .compact
+                  .map { |element| clean_link(element) }
+  end
+
+  def clean_link(element)
+    # TODO remove anchor?
+    element.attribute("href").to_s.strip
   end
 
   def linked_type(url)
@@ -239,20 +231,38 @@ class Webpage < ApplicationRecord
     uri = canonicalise(url)
     raise "Webpage:linked_type url http://" if uri.to_s == "http://" # Due to empty link
     ltype = begin
-              if uri.host != website.host
+              if uri.path.blank? || !(uri.scheme == "http" || uri.scheme == "https") || uri.path.match?(%r{/(mainmenu|reports)\/})
+                nil
+              elsif uri.host != website.host
                 "offsite"
               elsif uri.path.match?(/\.pdf$/i)
                 "pdf"
               elsif uri.path.match?(/\.(jpg|jpeg|png|gif)$/i)
                 "image"
-              elsif uri.path.blank? || !(uri.scheme == "http" || uri.scheme == "https") || uri.path.match?(%r{/(mainmenu|reports)\/})
-                nil
               else
-                "webpage"
+                # Might be a redirect.
+                if new_url = resolve_redirection(url)
+                  p "!!! new url #{new_url}"
+                  linked_type(new_url)
+                else
+                  "webpage"
+                end
               end
             end
     p "!!! linked_type ltype #{ltype}"
     ltype
+  end
+
+  def resolve_redirection(url)
+    p "!!! resolve_redirection? #{url}"
+    depth = 0
+    loop do
+      asset = Asset.asset_for_redirection(URI.parse(url))
+      url = asset.asset_urls.first
+      return url if asset.asset_type != "Redirect Page"
+      depth += 1
+      raise "Webpage:resolve_redirection redirect depth exceeded" if depth > 5
+    end
   end
 
   def XXuseful_webpage_link?(link)
