@@ -64,15 +64,10 @@ class Website < ApplicationRecord
   def generate_archive(options)
     p "!!! Website:generate_archive options #{options.inspect}"
     dir = "/tmp/dh"
-    FileUtils.remove_entry_secure(dir) if File.exist?(dir)
+    # FileUtils.remove_entry_secure(dir) if File.exist?(dir)
     %w[html pdf image assets].each {|subdir| FileUtils.mkdir_p("#{dir}/#{subdir}")}
     @pdf_assets = Set.new
     @image_assets = Set.new
-    browser = Ferrum::Browser.new(
-      browser_options: {
-        "generate-pdf-document-outline": true
-      }
-    )
     if options[:webroot].present?
       @webroot = options[:webroot]
     else
@@ -84,20 +79,7 @@ class Website < ApplicationRecord
     else
       pages = webpages.where(status: "spidered")
     end
-    p "!!! Website:generate_archive count #{pages.count}"
-    pages.each do |webpage|
-      p "========== Website:generate_archive assetid #{webpage.asset.assetid}"
-      html_filename = webpage.generate_html(html_head)
-      page = browser.create_page
-      page.go_to("file://#{html_filename}")
-      page.pdf(
-        path: webpage.generated_filename("pdf"),
-        landscape: true,
-        format: :A4
-      )
-      browser.reset
-    end
-    browser.quit
+    generate_webpages(pages)
     generate_pdf_assets(options)
     generate_pdf_toc(options)
   end
@@ -123,6 +105,28 @@ class Website < ApplicationRecord
     @image_assets << asset
   end
 
+  def generate_webpages(webpages)
+    p "!!! Website:generate_webpages count #{webpages.count}"
+    browser = Ferrum::Browser.new(
+      browser_options: {
+        "generate-pdf-document-outline": true
+      }
+    )
+    webpages.each do |webpage|
+      p "========== Website:generate_archive assetid #{webpage.asset.assetid}"
+      html_filename = webpage.generate_html(html_head)
+      page = browser.create_page
+      page.go_to("file://#{html_filename}")
+      page.pdf(
+        path: webpage.generated_filename("pdf"),
+        landscape: true,
+        format: :A4
+      )
+      browser.reset
+    end
+    browser.quit
+  end
+
   def generate_pdf_assets(options)
     require 'open-uri'
     p "!!! @pdf_assets.count #{@pdf_assets.count}"
@@ -131,18 +135,20 @@ class Website < ApplicationRecord
       url = asset.asset_urls.first.url
       (pdf_assetid, pdf_filename) = parse_data_asset_url(url, "pdf")
       copy_filename = "/tmp/dh/assets/#{"%06d" % pdf_assetid}-#{pdf_filename}"
-      IO.copy_stream(URI.open("https://#{url}"), copy_filename)
+      # IO.copy_stream(URI.open("https://#{url}"), copy_filename)
     end
   end
 
   def generate_pdf_toc(options)
     p "!!! generate_pdf_toc @pdf_assets.size #{@pdf_assets.size}"
-    # pdfs_by_filename = get_squiz_pdf_list(options)
-    # p "!!! generate_pdf_toc @pdfs_by_filename.size #{@pdfs_by_filename.size}"
     File.open("/tmp/dh/toc-pdfs.html", "w") do |file|
       file.write("<html>\n#{html_head}\n<h1>PDF TOC</h1><table>\n")
-      @pdf_assets.each do |asset|
-        file.write("<tr><td><a href='assets/#{"%06d" % asset.assetid}-#{asset.asset_urls.first.url}'>#{asset.name}</a></td></tr>\n")
+      column = 0
+      @pdf_assets.sort_by { it.name.downcase }.each do |asset|
+        file.write("<tr>") if column % 3 == 0
+        file.write("<td><a href='assets/#{"%06d" % asset.assetid}-#{asset.name}'>#{asset.name}</a></td>\n")
+        file.write("</tr>") if (column + 1) % 3 == 0
+        column += 1
       end
       file.write("</table>\n</html>\n")
       file.close

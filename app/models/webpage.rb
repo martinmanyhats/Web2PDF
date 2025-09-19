@@ -101,12 +101,14 @@ class Webpage < ApplicationRecord
     raise "Webpage:generate_html not spidered id #{id}" if status != "spidered"
     filename = generated_filename("html")
     File.open(filename, "wb") do |file|
-      file.write("<html>\n#{head}\n<content_for_url>\n")
-      parsed_content = Nokogiri::HTML(content)
-      generate_html_links(parsed_content)
-      # process_images(parsed_content)
-      file.write("<div id='webpage-#{"%06d" % asset.assetid}'>#{header_html}#{parsed_content.to_html}</div>")
-      file.write("</content_for_url>\n</html>\n")
+      file.write("<html>\n#{head}\n")
+      body = Nokogiri::HTML(content).css("body").first
+      body["data-assetid"] = "%06d" % asset.assetid
+      body.first_element_child.before(Nokogiri::XML::DocumentFragment.parse(header_html))
+      generate_html_links(body)
+      # generate_html_images(body)
+      file.write(body.to_html)
+      file.write("</html>\n")
       file.close
       return filename
     end
@@ -130,10 +132,12 @@ class Webpage < ApplicationRecord
 
   def generate_html_links(parsed_content)
     spiderable_link_elements(parsed_content).each do |element|
+      p "!!! generate_html_links #{element.inspect}"
       link = clean_link(element)
       next if link.blank? # Faulty links in content.
       uri = canonicalise(link)
       asset = Asset.asset_for_uri(uri)
+      p "!!! generate_html_links asset #{asset.inspect}"
       if asset&.redirect_url
         p "!!! generate_html_links redirect #{asset.redirect_url}"
         # Spidering has already recursively resolved redirects.
@@ -146,6 +150,7 @@ class Webpage < ApplicationRecord
         p "!!! internally linking to #{uri.to_s} #{dest_page.squiz_short_name}"
         element.attributes["href"].value = "#{website.webroot}/#{generated_filename_base(dest_page.asset.assetid)}.pdf"
       elsif asset.pdf?
+        element.attributes["href"].value = "#{website.webroot}/assets/#{"%06d" % asset.assetid}-#{asset.name}"
         website.add_pdf(asset)
       elsif asset.image?
         website.add_image(asset)
