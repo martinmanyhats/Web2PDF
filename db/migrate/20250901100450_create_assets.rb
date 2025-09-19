@@ -6,6 +6,7 @@ class CreateAssets < ActiveRecord::Migration[8.0]
       t.string :asset_type, null: false
       t.string :name, null: false
       t.string :short_name, null: false
+      t.string :redirect_url
       t.string :digest
 
       t.timestamps

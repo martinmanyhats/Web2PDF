@@ -2,11 +2,11 @@ class Asset < ApplicationRecord
   belongs_to :website
   has_many :asset_urls
 
-  def self.asset_for_url(url)
-    AssetUrl.find_by(url: url)&.asset
-  end
+  def self.asset_for_uri(uri) = AssetUrl.find_by(url: "#{uri.host}#{uri.path}")&.asset
 
-  def self.asset_for_redirection(uri)
+  def self.asset_for_url(url) = AssetUrl.find_by(url: url)&.asset
+
+  def self.XXasset_for_redirection(uri)
     p "!!! asset_for_redirection uri #{uri.inspect}"
     response = HTTParty.head(uri, headers: Website.http_headers, follow_redirects: false)
     p "!!! asset_for_redirection response #{response.inspect}"
@@ -28,24 +28,36 @@ class Asset < ApplicationRecord
       if line =~ /tr class="squiz_asset"/
         values = line.match(assets_regex)
         # p "!!! values #{values.inspect}"
+        # p "!!! assetid #{values[1]}"
         Rails.logger.silence do
           asset = Asset.create(website: website, assetid: values[1], asset_type: values[2], name: values[3], short_name: values[4])
-          JSON.parse(values[5]).uniq.map do |url|
-            if url.blank?
-              case asset.asset_type
-              when "MS Word Document"
-                url = "#{url}/__data/assets/word_doc/#{squiz_hash(asset.assetid)}{/#{asset.assetid}/#{asset.name}"
-              when "MS Excel Document"
-                url = "#{url}/__data/assets/excel_doc/#{squiz_hash(asset.assetid)}/#{asset.assetid}/#{asset.name}"
-              else
-                raise "Website:get_published_assets missing url #{asset.inspect}"
+          url_info = JSON.parse(values[5])
+          asset_urls = url_info[0].uniq
+          if asset_urls.empty?
+            case asset.asset_type
+            when "MS Word Document"
+              url = "#{url}/__data/assets/word_doc/#{asset.squiz_hash}{/#{asset.assetid}/#{asset.name}"
+            when "MS Excel Document"
+              url = "#{url}/__data/assets/excel_doc/#{asset.squiz_hash}/#{asset.assetid}/#{asset.name}"
+            else
+              raise "Website:get_published_assets missing url #{asset.inspect}"
+            end
+          else
+            asset_urls.map do |url|
+              raise "Asset:get_published_assets duplicate url #{url} assetid #{asset.assetid}" if AssetUrl.where(url: url).exists?
+              # Only accumulate URLs for this website.
+              # Also suppress bizarro URLs which are likely faulty.
+              if url.starts_with?(website.hostname) && !url.include?("/reports/")
+                asset.asset_urls << AssetUrl.create(url: url)
               end
             end
-            # Only accumulate URLs for this website.
-            if AssetUrl.where(url: url).exists?
-              p "**** duplicate url #{url}"
-            end
-            asset.asset_urls << AssetUrl.create(url: url) if url.starts_with?(website.hostname)
+          end
+          if url_info[1].present?
+            asset.redirect_url = url_info[1]
+            p "!!! asset.redirect_url #{asset.redirect_url}"
+            raise "Asset:get_published_assets missing scheme for redirection #{asset.redirect_url}" unless URI.parse(asset.redirect_url).scheme
+            raise "Asset:get_published_assets missing host for redirection #{asset.redirect_url}" unless URI.parse(asset.redirect_url).host
+            raise "Asset:get_published_assets missing path for redirection #{asset.redirect_url}" unless URI.parse(asset.redirect_url).path
           end
           p "!!! get_published_assets asset #{asset.inspect} urls #{asset.asset_urls.inspect}"
           asset.save!
@@ -77,33 +89,63 @@ class Asset < ApplicationRecord
   end
 
   def document
-    @_document ||= begin
-                     p "!!! document url #{asset_urls.first.url}"
-                     uri = URI.parse("https://#{asset_urls.first.url}")
-                     p "!!! document uri #{uri}"
-                     response = HTTParty.get(uri, {
-                       headers: Website.http_headers,
-                     })
-                     # TODO: error checking, retry
-                     # p "!!! Website:content_for_url headers #{response.headers}"
-                     # p "!!! Website:content_for_url body #{response.body.truncate(8000)}"
-                     Nokogiri::HTML(response.body)
-                   end
+    @_document ||=
+      begin
+        p "!!! document url #{asset_urls.first.url}"
+        uri = URI.parse("https://#{asset_urls.first.url}")
+        p "!!! document uri #{uri}"
+        response = HTTParty.get(uri, {
+          headers: Website.http_headers,
+        })
+        # TODO: error checking, retry
+        # p "!!! Website:content_for_url headers #{response.headers}"
+        # p "!!! Website:content_for_url body #{response.body.truncate(8000)}"
+        Nokogiri::HTML(response.body)
+      end
   end
 
-  def content_page?
-    ["Standard Page", "Asset Listing Page", "DOL Google Sheet viewer", "DOL Largeimage"].include? asset_type
+  def content_page? = ["Standard Page", "Asset Listing Page", "DOL Google Sheet viewer", "DOL Largeimage"].include? asset_type
+
+  def redirect_page? = ["Redirect Page"].include? asset_type
+
+  def image? = ["Image", "Thumbnail"].include? asset_type
+
+  def pdf? = ["PDF File"].include? asset_type
+
+  def attachment? = ["MS Excel Document", "File", "MS Word Document", "MP3 File", "Video File"].include? asset_type
+
+  # include/general.inc
+  # function get_asset_hash($assetid)
+  # {
+  #         $assetid = trim($assetid);
+  #         do {
+  #                 $hash = 0;
+  #                 $len = strlen($assetid);
+  #                 for ($i = 0; $i < $len; $i++) {
+  #                         if ((int) $assetid{$i} != $assetid{$i}) {
+  #                                 $hash += ord($assetid{$i});
+  #                         } else {
+  #                                 $hash += (int) $assetid{$i};
+  #                         }
+  #                 }
+  #                 $assetid = (string) $hash;
+  #         } while ($hash > SQ_CONF_NUM_DATA_DIRS);
+  #
+  #         while (strlen($hash) != 4) {
+  #                 $hash = '0'.$hash;
+  #         }
+  #         return $hash;
+  #
+  # }
+  def squiz_hash
+    p "!!! squiz_hash assetid #{assetid}"
+    assetid = assetid.to_s
+    loop do
+      hash = assetid.each_char.map(&:to_i).sum
+      assetid = hash.to_s
+      break if hash <= 20 # SQ_CONF_NUM_DATA_DIRS
+    end
+    "%04d" % assetid
   end
 
-  def redirection?
-    ["Redirect Page"].include? asset_type
-  end
-
-  def image?
-    ["Image", "Thumbnail"].include? asset_type
-  end
-
-  def attachment?
-    ["MS Excel Document", "File", "MS Word Document", "MP3 File", "Video File"].include? asset_type
-  end
 end

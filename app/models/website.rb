@@ -7,7 +7,7 @@ class Website < ApplicationRecord
   after_update_commit -> { broadcast_refresh_later }
 
   attr_reader :webroot
-  attr_reader :pdfs_by_filename
+  attr_reader :pdf_assets
 
   DataAsset = Struct.new(:assetid, :short_name, :filename, :url, :digest)
 
@@ -24,7 +24,8 @@ class Website < ApplicationRecord
 
   def spider_one(assetid)
     p "!!! spider_one assetid #{assetid}"
-    webpage = webpages.find_sole_by(squiz_assetid: assetid)
+    asset = Asset.find_by(assetid: assetid)
+    webpage = webpages.find_sole_by(asset_id: asset.id)
     notify_current_webpage(webpage, "spidering")
     webpage.status = "unspidered"
     webpage.spider(follow_links: false)
@@ -64,9 +65,9 @@ class Website < ApplicationRecord
     p "!!! Website:generate_archive options #{options.inspect}"
     dir = "/tmp/dh"
     FileUtils.remove_entry_secure(dir) if File.exist?(dir)
-    %w[html pdf image].each {|subdir| FileUtils.mkdir_p("#{dir}/#{subdir}")}
-    @pdf_uris = Set.new
-    @image_uris = Set.new
+    %w[html pdf image assets].each {|subdir| FileUtils.mkdir_p("#{dir}/#{subdir}")}
+    @pdf_assets = Set.new
+    @image_assets = Set.new
     browser = Ferrum::Browser.new(
       browser_options: {
         "generate-pdf-document-outline": true
@@ -78,13 +79,14 @@ class Website < ApplicationRecord
       @webroot = "file:///tmp/dh"
     end
     if options[:assetid].present?
-      pages = webpages.where(squiz_assetid: options[:assetid])
+      asset = Asset.find_by(assetid: options[:assetid])
+      pages = webpages.where(asset_id: asset.id)
     else
       pages = webpages.where(status: "spidered")
     end
     p "!!! Website:generate_archive count #{pages.count}"
     pages.each do |webpage|
-      p "========== Website:generate_archive assetid #{webpage.squiz_assetid}"
+      p "========== Website:generate_archive assetid #{webpage.asset.assetid}"
       html_filename = webpage.generate_html(html_head)
       page = browser.create_page
       page.go_to("file://#{html_filename}")
@@ -109,52 +111,42 @@ class Website < ApplicationRecord
     @_host ||= Addressable::URI.parse(url).host
   end
 
-  def add_pdf_uri(uri)
-    p "!!! add_pdf_uri uri #{uri}"
-    raise "Website:add_pdf_uri blank" if uri.blank?
-    @pdf_uris << uri
+  def add_pdf(asset)
+    p "!!! add_pdf assetid #{asset.assetid}"
+    raise "Website:add_pdf no urls" if asset.asset_urls.empty?
+    @pdf_assets << asset
   end
 
-  def add_image_uri(uri)
-    p "!!! add_image_uri uri #{uri}"
-    raise "Website:add_image_uri blank" if uri.blank?
-    @image_uris << uri
+  def add_image(asset)
+    p "!!! add_image assetid #{asset.assetid}"
+    raise "Website:add_image no urls" if asset.asset_urls.empty?
+    @image_assets << asset
   end
 
   def generate_pdf_assets(options)
     require 'open-uri'
-    p "!!! @pdf_uris.count #{@pdf_uris.count}"
-    @pdf_uris.each do |uri|
-      p "!!! generate_pdf_asset uri #{uri}"
-      (pdf_assetid, pdf_filename) = parse_data_asset_uri(uri, "pdf")
-      filename = "/tmp/dh/pdf-#{"%06d" % pdf_assetid}-#{pdf_filename}"
-      IO.copy_stream(URI.open(uri), filename)
+    p "!!! @pdf_assets.count #{@pdf_assets.count}"
+    @pdf_assets.each do |asset|
+      p "!!! generate_pdf_assets asset #{asset.inspect}"
+      url = asset.asset_urls.first.url
+      (pdf_assetid, pdf_filename) = parse_data_asset_url(url, "pdf")
+      copy_filename = "/tmp/dh/assets/#{"%06d" % pdf_assetid}-#{pdf_filename}"
+      IO.copy_stream(URI.open("https://#{url}"), copy_filename)
     end
   end
 
   def generate_pdf_toc(options)
-    p "!!! generate_pdf_toc @pdf_uris.size #{@pdf_uris.size}"
-    get_squiz_pdf_list(options)
-    p "!!! generate_pdf_toc @pdfs_by_filename.size #{@pdfs_by_filename.size}"
+    p "!!! generate_pdf_toc @pdf_assets.size #{@pdf_assets.size}"
+    # pdfs_by_filename = get_squiz_pdf_list(options)
+    # p "!!! generate_pdf_toc @pdfs_by_filename.size #{@pdfs_by_filename.size}"
     File.open("/tmp/dh/toc-pdfs.html", "w") do |file|
       file.write("<html>\n#{html_head}\n<h1>PDF TOC</h1><table>\n")
-      @pdfs_by_filename.each_key.sort do |filename|
-        file.write("<tr><td><a href='#{filename}'>#{filename}</a></td></tr>\n")
+      @pdf_assets.each do |asset|
+        file.write("<tr><td><a href='assets/#{"%06d" % asset.assetid}-#{asset.asset_urls.first.url}'>#{asset.name}</a></td></tr>\n")
       end
       file.write("</table>\n</html>\n")
       file.close
     end
-  end
-
-  def XXcontent_for_url(a_url)
-    # p "!!! Website:content_for_url url #{a_url}"
-    response = HTTParty.get(a_url, {
-      headers: Website.http_headers,
-    })
-    # TODO: error checking, retry
-    # p "!!! Website:content_for_url headers #{response.headers}"
-    # p "!!! Website:content_for_url body #{response.body.truncate(8000)}"
-    response.body
   end
 
   def hostname
@@ -167,11 +159,32 @@ class Website < ApplicationRecord
     }
   end
 
+  def log(name, message)
+    @logs_created ||= {}
+    log_filename = case name
+                   when :pdf_duplicates
+                     "tmp/pdf_duplicates"
+                   when :ignored_links
+                     "tmp/ignored_links"
+                   else
+                     raise "Website:log unknown name #{name}"
+                   end
+    p "!!! log #{log_filename} @log_created.has_key?(log_filename) #{@logs_created.has_key?(log_filename)}"
+    unless @logs_created.has_key?(log_filename)
+      File.open(log_filename, "w") do |file|
+        p "!!! Website:log created #{log_filename}"
+        file.puts("Log created #{DateTime.now.iso8601}")
+        @logs_created[log_filename] = true
+      end
+    end
+    File.open(log_filename, "a") { |file| file.puts(message)}
+  end
+
   private
 
-  def parse_data_asset_uri(uri, suffix)
-    matches = uri.to_s.match(%r{__data/assets/#{suffix}_file/\d+/(\d+)/(.*\.#{suffix}$)})
-    raise "Website:parse_data_asset_uri cannot parse uri #{uri} suffix #{suffix}" if matches.nil?
+  def parse_data_asset_url(url, suffix)
+    matches = url.match(%r{__data/assets/#{suffix}_file/\d+/(\d+)/(.*\.#{suffix}$)}i)
+    raise "Website:parse_data_asset_url cannot parse url #{url} suffix #{suffix}" if matches.nil?
     matches.captures
   end
 
@@ -234,40 +247,41 @@ class Website < ApplicationRecord
     report = Nokogiri::HTML(URI.open("#{url}/reports/allpdfs/_recache"))
     pdfs = report.css("[id='allpdfs'] tr")
     p "!!! get_squiz_pdf_list size #{pdfs.size}"
-    @pdfs_by_filename = {}
-    @pdfs_by_digest = {}
-    pdfs.first(5).each do |pdf|
+    pdfs_by_assetid = {}
+    pdfs_by_digest = {}
+    pdfs.each do |pdf|
       (assetid, short_name, filename, url) = pdf.css("td").map(&:text)
       digest = nil
       p "!!! get_squiz_pdf_list assetid #{assetid} filename #{filename}"
       filename_duplicate = false
-      if @pdfs_by_filename.has_key?(filename)
-        existing = @pdfs_by_filename[filename]
+      if pdfs_by_assetid.has_key?(assetid)
+        existing = pdfs_by_assetid[assetid]
         p ">>> FILENAME assetids #{existing.assetid}:#{assetid} short names #{existing.short_name}:#{short_name} filename #{filename} "
         existing.digest = get_digest(existing.url) unless existing.digest
         digest = get_digest(url)
         filename_duplicate = true
         log(:pdf_duplicates, "FILENAME assetids #{existing.assetid}:#{assetid}   short names #{existing.short_name}:#{short_name}   filename #{filename}  #{digest != existing.digest ? "  CONTENTS DIFFER" : ""}")
-        asset = existing
+        data_asset = existing
       else
-        asset = DataAsset.new(assetid: assetid.to_i, short_name: short_name, filename: filename, url: url, digest: digest)
-        @pdfs_by_filename[filename] = asset
+        data_asset = DataAsset.new(assetid: assetid.to_i, short_name: short_name, filename: filename, url: url, digest: digest)
+        pdfs_by_assetid[filename] = data_asset
       end
       if options.has_key?(:digest)
         digest = get_digest(url) unless digest
-        if @pdfs_by_digest.has_key?(digest) && !filename_duplicate
-          existing = @pdfs_by_digest[digest]
-          p " >>> CONTENT url #{url} asset #{@pdfs_by_digest[digest]}"
+        if pdfs_by_digest.has_key?(digest) && !filename_duplicate
+          existing = pdfs_by_digest[digest]
+          p " >>> CONTENT url #{url} data_asset #{pdfs_by_digest[digest]}"
           log(:pdf_duplicates, "CONTENT assetids #{existing.assetid}:#{assetid}   short names #{existing.short_name}:#{short_name}   filenames #{filename}:#{existing.filename}")
         else
-          asset.digest = digest
-          @pdfs_by_digest[digest] = asset
+          data_asset.digest = digest
+          pdfs_by_digest[digest] = data_asset
         end
       end
     end
     false && @pdf_uris.each do |uri|
       raise "Website:get_squiz_pdf_list unknown filename #{filename}" unless @pdfs_by_filename.has_key?(File.basename(uri.to_s))
     end
+    pdfs_by_assetid
   end
 
   def notify_current_webpage(webpage, notice="NONE")
@@ -299,61 +313,8 @@ class Website < ApplicationRecord
     digest
   end
 
-  def log(name, message)
-    @logs_created ||= {}
-    log_filename = case name
-                   when :pdf_duplicates
-                     "tmp/pdf_duplicates"
-                   else
-                     raise "Website:log unknown name #{name}"
-                   end
-    p "!!! log #{log_filename} @log_created.has_key?(log_filename) #{@logs_created.has_key?(log_filename)}"
-    unless @logs_created.has_key?(log_filename)
-      File.open(log_filename, "w") do |file|
-        p "!!! Website:log created #{log_filename}"
-        file.puts("Log created #{DateTime.now.iso8601}")
-        @logs_created[log_filename] = true
-      end
-    end
-    File.open(log_filename, "a") { |file| file.puts(message)}
-  end
-
   def log_to_file(filename, message)
     p "!!! log_to_file #{filename}"
     File.open(filename, "a") { |f| f.puts(message)}
-  end
-
-  # include/general.inc
-  # function get_asset_hash($assetid)
-  # {
-  #         $assetid = trim($assetid);
-  #         do {
-  #                 $hash = 0;
-  #                 $len = strlen($assetid);
-  #                 for ($i = 0; $i < $len; $i++) {
-  #                         if ((int) $assetid{$i} != $assetid{$i}) {
-  #                                 $hash += ord($assetid{$i});
-  #                         } else {
-  #                                 $hash += (int) $assetid{$i};
-  #                         }
-  #                 }
-  #                 $assetid = (string) $hash;
-  #         } while ($hash > SQ_CONF_NUM_DATA_DIRS);
-  #
-  #         while (strlen($hash) != 4) {
-  #                 $hash = '0'.$hash;
-  #         }
-  #         return $hash;
-  #
-  # }
-  def squiz_hash(assetid)
-    p "!!! squiz_hash assetid #{assetid}"
-    assetid = assetid.to_s
-    loop do
-      hash = assetid.each_char.map(&:to_i).sum
-      assetid = hash.to_s
-      break if hash <= 20 # SQ_CONF_NUM_DATA_DIRS
-    end
-    "%04d" % assetid
   end
 end

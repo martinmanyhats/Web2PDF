@@ -4,30 +4,6 @@ class Webpage < ApplicationRecord
 
   PAGE_NOT_FOUND_SQUIZ_ASSETID = "13267"
 
-  def self.XXlocal_html?(site_url, url)
-    # p "!!! Webpage:local_html? url #{url}"
-    max_redirect = 5
-    loop do
-      # p "!!! Webpage:local_html? url #{url}"
-      headers = HTTParty.head(url, {
-        follow_redirects: false,
-        headers: Website.http_headers,
-      })
-      if headers.response.is_a?(Net::HTTPSuccess)
-        return headers["content-type"].starts_with?("text/html")
-      elsif headers.response.is_a?(Net::HTTPRedirection)
-        # p "!!! redirection"
-        return false unless headers["location"].starts_with?(site_url)
-        url = headers["location"]
-      elsif headers.response.is_a?(Net::HTTPClientError)
-        return false
-      end
-      max_redirect -= 1
-      break if max_redirect < 0
-    end
-    raise "Webpage:local_html? Too many redirects for #{url}"
-  end
-
   def spider(follow_links: true)
     p "!!! Webpage:spider #{inspect}"
     raise "Webpage:spider not unspidered #{inspect}" unless status == "unspidered"
@@ -40,36 +16,7 @@ class Webpage < ApplicationRecord
     extract_info(asset.document)
 
     if follow_links
-      spiderable_links(Nokogiri::HTML(content)).each do |link|
-        p "+++++ link #{link}"
-        raise "Webpage:spider link not interpolated #{link} in assetid #{asset.assetid} (#{squiz_short_name}) #{squiz_canonical_url}" if link.include?("./?a=")
-        uri = canonicalise(link)
-        next if uri.host != website.host
-        next if uri.path.blank?
-        next unless uri.scheme == "http" || uri.scheme == "https"
-        next if uri.path.match?(%r{/(mainmenu|reports|sitemap|sitearchive|testing)})
-        next if uri.path.match?(/\.(jpg|jpeg|png|gif|pdf|doc|docx|xls|xlsx|xml|mp3|js|css|rtf|txt)$/i)
-        p "!!! Webpage:spider uri #{uri.host}#{uri.path} from #{asset.assetid}"
-        host_path = "#{uri.host}#{uri.path}"
-        linked_asset = Asset.asset_for_url(host_path)
-        p "!!! Webpage:asset #{linked_asset.inspect}"
-        if linked_asset.present?
-          if linked_asset.content_page?
-            create_webpage(linked_asset)
-          elsif linked_asset.redirection?
-            p "!!! Webpage:spider redirection #{host_path}"
-            if website.internal?(url) && (linked_asset = Asset.asset_for_redirection(uri))
-              create_webpage(linked_asset)
-            end
-          else
-            p "!!! Webpage:spider asset is not a page #{host_path}"
-          end
-        else
-          # Ignore problems with links in Google Sheets.
-          next if asset.asset_type == "DOL Google Sheet viewer"
-          raise "Webpage:spider missing asset for #{host_path} webpage #{inspect}"
-        end
-      end
+      spiderable_link_elements(Nokogiri::HTML(content)).map { clean_link(it) }.each { spider_link(it) }
     end
 
     false && if squiz_short_name.blank?
@@ -84,6 +31,50 @@ class Webpage < ApplicationRecord
     p "!!! Webpage:spider save #{asset.assetid}"
     Rails.logger.silence do
       save!
+    end
+  end
+
+  def spider_link(link, depth = 0)
+    p "!!! Webpage:spider_link link #{link}"
+    raise "Webpage:spider_link depth exceeded #{link}" if depth > 3
+    raise "Webpage:spider_link link not interpolated #{link} in assetid #{asset.assetid} (#{squiz_short_name}) #{squiz_canonical_url}" if link.include?("./?a=")
+    uri = canonicalise(link)
+    if uri.host != website.host ||
+       uri.path.blank? ||
+       !(uri.scheme == "http" || uri.scheme == "https") ||
+       uri.path.match?(%r{/(mainmenu|reports|sitemap|testing)}) ||
+       uri.path.match?(/\.(jpg|jpeg|png|gif|pdf|doc|docx|xls|xlsx|xml|mp3|js|css|rtf|txt)$/i)
+      p "!!! Webpage:spider_link skipping #{link}"
+      return
+    end
+    false && begin
+    return if uri.host != website.host
+    return if uri.path.blank?
+    return unless uri.scheme == "http" || uri.scheme == "https"
+    return if uri.path.match?(%r{/(mainmenu|reports|sitemap|testing)})
+    return if uri.path.match?(/\.(jpg|jpeg|png|gif|pdf|doc|docx|xls|xlsx|xml|mp3|js|css|rtf|txt)$/i)
+    end
+    p "!!! Webpage:spider_link uri #{uri.host}#{uri.path} from #{asset.assetid}"
+    host_path = "#{uri.host}#{uri.path}"
+    linked_asset = Asset.asset_for_url(host_path)
+    p "!!! Webpage:asset #{linked_asset.inspect}"
+    if linked_asset.present?
+      if linked_asset.content_page?
+        create_webpage(linked_asset)
+      elsif linked_asset.redirect_page?
+        p "!!! asset.redirect_url #{linked_asset.redirect_url}"
+        raise "Webpage:spider_link missing redirect_url linked_asset #{linked_asset.inspect}" unless linked_asset.redirect_url
+        if website.internal?(linked_asset.redirect_url)
+          p "!!! spider_link recursing"
+          spider_link(linked_asset.redirect_url, depth + 1)
+        end
+      else
+        p "!!! Webpage:spider_link asset is not a content page #{host_path}"
+      end
+    else
+      # Ignore problems with links in Google Sheets.
+      return if asset.asset_type == "DOL Google Sheet viewer"
+      raise "Webpage:spider_link missing asset for host_path #{host_path} webpage #{inspect}"
     end
   end
 
@@ -112,7 +103,7 @@ class Webpage < ApplicationRecord
     File.open(filename, "wb") do |file|
       file.write("<html>\n#{head}\n<content_for_url>\n")
       parsed_content = Nokogiri::HTML(content)
-      process_links(parsed_content)
+      generate_html_links(parsed_content)
       # process_images(parsed_content)
       file.write("<div id='webpage-#{"%06d" % asset.assetid}'>#{header_html}#{parsed_content.to_html}</div>")
       file.write("</content_for_url>\n</html>\n")
@@ -124,12 +115,7 @@ class Webpage < ApplicationRecord
 
   def generated_filename(suffix, assetid = asset.assetid) = "/tmp/dh/#{suffix}/#{generated_filename_base(assetid)}.#{suffix}"
 
-  def generated_filename_base(assetid = asset.assetid) = "art-#{"%06d" % assetid}"
-
-  def XXdocument_for_url(a_url)
-    p "!!! document_for_url #{a_url}"
-    Nokogiri::HTML(website.content_for_url(canonicalise(a_url)))
-  end
+  def generated_filename_base(assetid = asset.assetid) = "page-#{"%06d" % assetid}"
 
   private
 
@@ -142,31 +128,37 @@ class Webpage < ApplicationRecord
     self.content =  doc.css("#main-content")&.inner_html
   end
 
-  def process_links(parsed_content)
-    spiderable_links(parsed_content).each do |link|
+  def generate_html_links(parsed_content)
+    spiderable_link_elements(parsed_content).each do |element|
+      link = clean_link(element)
       next if link.blank? # Faulty links in content.
       uri = canonicalise(link)
-      case linked_type(uri)
-      when "webpage"
-        p "!!! webpage uri #{uri}"
-        dest_page = Webpage.find_by(squiz_canonical_url: uri.to_s)
-        raise "Webpage:process_links cannot find #{uri.to_s}" unless dest_page
-        p "!!! internally linking to #{uri.to_s} {#{dest_page.squiz_short_name}"
-        element.attributes["href"].value = "#{website.webroot}/#{generated_filename_base(dest_page.squiz_assetid)}.pdf"
-      when "pdf"
-        website.add_pdf_uri(uri)
-      when "image"
-        website.add_image_uri(uri)
+      asset = Asset.asset_for_uri(uri)
+      if asset&.redirect_url
+        p "!!! generate_html_links redirect #{asset.redirect_url}"
+        # Spidering has already recursively resolved redirects.
+        asset = Asset.asset_for_url(asset.redirect_url)
+      end
+      next if asset.nil?
+      if asset.content_page?
+        dest_page = Webpage.find_by(asset_id: asset.id)
+        raise "Webpage:generate_html_links cannot find dest_page assetid #{asset.assetid} link #{link} uri #{uri}" unless dest_page
+        p "!!! internally linking to #{uri.to_s} #{dest_page.squiz_short_name}"
+        element.attributes["href"].value = "#{website.webroot}/#{generated_filename_base(dest_page.asset.assetid)}.pdf"
+      elsif asset.pdf?
+        website.add_pdf(asset)
+      elsif asset.image?
+        website.add_image(asset)
       else
-        p "!!! ignore #{uri.to_s}"
-        next
+        p ">>>>>>>>>> IGNORING uri #{uri} link#{link}"
+        website.log(:ignored_links, "assetid #{asset.assetid} link #{link}")
       end
       # TODO anchors
     end
   end
 
   def process_images(body)
-    parsed_content.css("img").map.each do |image|
+    parsed_content.css("img").each do |image|
       p "!!! image #{image["src"]}"
       url = image["src"]
       case File.extname(url).downcase
@@ -213,12 +205,11 @@ class Webpage < ApplicationRecord
     uri
   end
 
-  def spiderable_links(parsed_content)
+  def spiderable_link_elements(parsed_content)
     # Skip anchors and links with same page.
     parsed_content.css("a[href]")
                   .select { |a| !a["href"].start_with?("#") }
                   .compact
-                  .map { |element| clean_link(element) }
   end
 
   def clean_link(element)
@@ -263,29 +254,6 @@ class Webpage < ApplicationRecord
       depth += 1
       raise "Webpage:resolve_redirection redirect depth exceeded" if depth > 5
     end
-  end
-
-  def XXuseful_webpage_link?(link)
-    # p "!!! useful_webpage_link? #{link}"
-    return false if link.blank? || link == "http://"  # HACK for DH content errora.
-    uri = Addressable::URI.parse(link)
-    uri = canonicalise(uri)
-    # p "!!! useful_webpage_link? uri.scheme #{uri.scheme} uri.host #{uri.host} uri.path #{uri.path}"
-    if uri.host != website.host
-      # p "~~~~~~ not this website"
-      return false
-    end
-    if uri.path.blank?
-      # p "~~~~~~ blank path"
-      return false
-    end
-    return false unless uri.scheme == "http" || uri.scheme == "https"
-    return false if uri.path.match?(%r{/(mainmenu|reports)\/})
-    if uri.path.match?(/\.(jpg|jpeg|png|gif|pdf|doc|docx|xls|xlsx|xml|mp3|js|css|rtf|txt)$/i)
-      # p "~~~~~~ skipping due to suffix uri.path #{uri.path}"
-      return false
-    end
-    true
   end
 
   def document

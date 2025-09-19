@@ -26,6 +26,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_05_094131) do
     t.string "asset_type", null: false
     t.string "name", null: false
     t.string "short_name", null: false
+    t.string "redirect_url"
     t.string "digest"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false

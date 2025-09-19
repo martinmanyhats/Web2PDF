@@ -1,15 +1,17 @@
 %h1 Generate PDF
-%table
-  %tbody
-    - @website.pdfs_by_filename.each_pair do |filename, pdf|
-      %tbody
-        %tr
-          %td<= pdf.assetid
-          %td<= pdf.digest
-          %td<= filename
+%h2 Webpages
 %table
   %tbody
     - @website.webpages.each do |page|
       %tr
-        %td<= page.squiz_assetid
+        %td<= page.asset.assetid
         %td<= page.squiz_canonical_url
+%h2 PDFs
+%table
+  %tbody
+    - @website.pdf_assets.each do |asset|
+      %tbody
+        %tr
+          %td<= asset.assetid
+          %td<= asset.name
+          %td<= asset.asset_urls.first.url

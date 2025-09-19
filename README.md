@@ -9,6 +9,10 @@ TODO
 
 Code added to mysource_matrix/core/include/asset.inc:
 
+        /*
+         * martin@martinreed.co.uk 2025-09-04
+         * Return array: [0] array of webpaths, [1] redirection URL or ''
+         */
         public function getAssetUrlsKeywordReplacement()
         {
                 // retrieve all existing URLs for this asset
@@ -23,8 +27,15 @@ Code added to mysource_matrix/core/include/asset.inc:
                         MatrixDAL::bindValueToPdo($query, 'assetid', $this->id);
                         $urls = MatrixDAL::executePdoAssoc($query);
                 } catch (Exception $e) {
-                        throw new Exception('Unable to get fll urls for asset "'.$this->name.'" (#'.$this->id.') due to database error: '.$e->getMessage());
+                        throw new Exception('Unable to get all urls for asset "'.$this->name.'" (#'.$this->id.') due to database error: '.$e->getMessage());
                 }
                 $urls = array_map(function($url) { return $url['url']; }, $urls);
-                return json_encode($urls);
+                if (method_exists($this, '_getRedirectURL')) {
+                        $redirect_url = $this->_getRedirectURL();
+                }
+                else {
+                        $redirect_url = '';
+
+                }
+                return json_encode([$urls, $redirect_url], JSON_UNESCAPED_SLASHES);
         }
