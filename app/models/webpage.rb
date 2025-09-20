@@ -83,7 +83,7 @@ class Webpage < ApplicationRecord
     webpage = Webpage.find_or_initialize_by(asset_id: asset.id) do |newpage|
       p "========== new Webpage assetid #{asset.assetid}"
       newpage.website = website
-      newpage.asset_path = "#{asset_path}/#{"%06d" % asset.assetid}"
+      newpage.asset_path = "#{asset_path}/#{asset.assetid_formatted}"
       newpage.status = "unspidered"
       newpage.asset = asset
       p "!!! create_webpage save #{asset.assetid}"
@@ -97,13 +97,13 @@ class Webpage < ApplicationRecord
     extract_info(asset.document)
   end
 
-  def generate_html(head)
+  def generate_html(file_root, head)
     raise "Webpage:generate_html not spidered id #{id}" if status != "spidered"
-    filename = generated_filename("html")
+    filename = filename_with_assetid(file_root, "html")
     File.open(filename, "wb") do |file|
       file.write("<html>\n#{head}\n")
-      body = Nokogiri::HTML(content).css("body").first
-      body["data-assetid"] = "%06d" % asset.assetid
+      body = Nokogiri::HTML("<div class='webpage-content'>#{content}</div>").css("body").first
+      body["data-assetid"] = asset.assetid_formatted
       body.first_element_child.before(Nokogiri::XML::DocumentFragment.parse(header_html))
       generate_html_links(body)
       # generate_html_images(body)
@@ -115,9 +115,10 @@ class Webpage < ApplicationRecord
     raise "Webpage:generate_html unable to create #{filename}"
   end
 
-  def generated_filename(suffix, assetid = asset.assetid) = "/tmp/dh/#{suffix}/#{generated_filename_base(assetid)}.#{suffix}"
-
-  def generated_filename_base(assetid = asset.assetid) = "page-#{"%06d" % assetid}"
+  def filename_with_assetid(file_root, suffix)
+    base = squiz_canonical_url.gsub(/.*\//, "")
+    "#{file_root}/#{suffix}/#{asset.assetid_formatted}-#{base}.#{suffix}"
+  end
 
   private
 
@@ -148,9 +149,9 @@ class Webpage < ApplicationRecord
         dest_page = Webpage.find_by(asset_id: asset.id)
         raise "Webpage:generate_html_links cannot find dest_page assetid #{asset.assetid} link #{link} uri #{uri}" unless dest_page
         p "!!! internally linking to #{uri.to_s} #{dest_page.squiz_short_name}"
-        element.attributes["href"].value = "#{website.webroot}/#{generated_filename_base(dest_page.asset.assetid)}.pdf"
+        element.attributes["href"].value = "#{website.webroot}/#{dest_page.asset.filename_base}.pdf"
       elsif asset.pdf?
-        element.attributes["href"].value = "#{website.webroot}/assets/#{"%06d" % asset.assetid}-#{asset.name}"
+        element.attributes["href"].value = "#{website.webroot}/assets/#{asset.assetid_formatted}-#{asset.name}"
         website.add_pdf(asset)
       elsif asset.image?
         website.add_image(asset)

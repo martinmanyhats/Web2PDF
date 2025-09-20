@@ -25,9 +25,18 @@ class Website < ApplicationRecord
   def spider_one(assetid)
     p "!!! spider_one assetid #{assetid}"
     asset = Asset.find_by(assetid: assetid)
-    webpage = webpages.find_sole_by(asset_id: asset.id)
+    p "!!! spider_one asset #{asset.inspect}"
+    webpage = Webpage.find_or_initialize_by(asset: asset) do |page|
+      page.website = self
+      page.asset_path = "/#{asset.assetid_formatted}"
+      page.status = "unspidered"
+    end
+    webpage.extract_info_from_document
+    p "!!! spider_one webpage saving #{webpage.inspect}"
+    Rails.logger.silence do
+      webpage.save!
+    end
     notify_current_webpage(webpage, "spidering")
-    webpage.status = "unspidered"
     webpage.spider(follow_links: false)
   end
 
@@ -35,8 +44,7 @@ class Website < ApplicationRecord
     root_asset = Asset.find_sole_by(assetid: 93)
     self.root_webpage = Webpage.find_or_initialize_by(asset: root_asset) do |page|
       page.website = self
-      page.asset = root_asset
-      page.asset_path = "/#{"%06d" % root_asset.assetid}"
+      page.asset_path = "/#{root_asset.assetid_formatted}"
       page.status = "unspidered"
       page.squiz_canonical_url = "#{url}"
     end
@@ -51,10 +59,10 @@ class Website < ApplicationRecord
 
     # Loop until all pages are spidered.
     loop do
-      unscraped_webpages = webpages.where(status: "unspidered").order(:id)
-      p "!!! Website::spider unscraped_webpages.count #{unscraped_webpages.count}"
-      break if unscraped_webpages.empty?
-      unscraped_webpages.each do |webpage|
+      unspidered_webpages = webpages.where(status: "unspidered").order(:id)
+      p "!!! Website::spider unspidered_webpages.count #{unspidered_webpages.count}"
+      break if unspidered_webpages.empty?
+      unspidered_webpages.each do |webpage|
         notify_current_webpage(webpage, "spidering")
         webpage.spider(follow_links: true)
       end
@@ -63,15 +71,15 @@ class Website < ApplicationRecord
 
   def generate_archive(options)
     p "!!! Website:generate_archive options #{options.inspect}"
-    dir = "/tmp/dh"
-    # FileUtils.remove_entry_secure(dir) if File.exist?(dir)
-    %w[html pdf image assets].each {|subdir| FileUtils.mkdir_p("#{dir}/#{subdir}")}
+    file_root = "/tmp/dh"
+    FileUtils.remove_entry_secure(file_root) if File.exist?(file_root)
+    %w[html pdf image assets].each {|subdir| FileUtils.mkdir_p("#{file_root}/#{subdir}")}
     @pdf_assets = Set.new
     @image_assets = Set.new
     if options[:webroot].present?
       @webroot = options[:webroot]
     else
-      @webroot = "file:///tmp/dh"
+      @webroot = "file://#{file_root}"
     end
     if options[:assetid].present?
       asset = Asset.find_by(assetid: options[:assetid])
@@ -79,9 +87,9 @@ class Website < ApplicationRecord
     else
       pages = webpages.where(status: "spidered")
     end
-    generate_webpages(pages)
-    generate_pdf_assets(options)
-    generate_pdf_toc(options)
+    generate_webpages(file_root, pages)
+    generate_pdf_assets(file_root, options)
+    generate_pdf_toc(file_root, options)
   end
 
   def internal?(url_or_uri)
@@ -105,7 +113,7 @@ class Website < ApplicationRecord
     @image_assets << asset
   end
 
-  def generate_webpages(webpages)
+  def generate_webpages(file_root, webpages)
     p "!!! Website:generate_webpages count #{webpages.count}"
     browser = Ferrum::Browser.new(
       browser_options: {
@@ -114,11 +122,11 @@ class Website < ApplicationRecord
     )
     webpages.each do |webpage|
       p "========== Website:generate_archive assetid #{webpage.asset.assetid}"
-      html_filename = webpage.generate_html(html_head)
+      html_filename = webpage.generate_html(file_root, html_head)
       page = browser.create_page
       page.go_to("file://#{html_filename}")
       page.pdf(
-        path: webpage.generated_filename("pdf"),
+        path: webpage.filename_with_assetid(file_root, "pdf"),
         landscape: true,
         format: :A4
       )
@@ -127,26 +135,26 @@ class Website < ApplicationRecord
     browser.quit
   end
 
-  def generate_pdf_assets(options)
+  def generate_pdf_assets(file_root, options)
     require 'open-uri'
     p "!!! @pdf_assets.count #{@pdf_assets.count}"
     @pdf_assets.each do |asset|
       p "!!! generate_pdf_assets asset #{asset.inspect}"
       url = asset.asset_urls.first.url
       (pdf_assetid, pdf_filename) = parse_data_asset_url(url, "pdf")
-      copy_filename = "/tmp/dh/assets/#{"%06d" % pdf_assetid}-#{pdf_filename}"
-      # IO.copy_stream(URI.open("https://#{url}"), copy_filename)
+      copy_filename = "#{file_root}/assets/#{Asset::ASSETID_FORMAT % pdf_assetid}-#{pdf_filename}"
+      IO.copy_stream(URI.open("https://#{url}"), copy_filename)
     end
   end
 
-  def generate_pdf_toc(options)
+  def generate_pdf_toc(file_root, options)
     p "!!! generate_pdf_toc @pdf_assets.size #{@pdf_assets.size}"
-    File.open("/tmp/dh/toc-pdfs.html", "w") do |file|
+    File.open("#{file_root}/toc-pdfs.html", "w") do |file|
       file.write("<html>\n#{html_head}\n<h1>PDF TOC</h1><table>\n")
       column = 0
       @pdf_assets.sort_by { it.name.downcase }.each do |asset|
         file.write("<tr>") if column % 3 == 0
-        file.write("<td><a href='assets/#{"%06d" % asset.assetid}-#{asset.name}'>#{asset.name}</a></td>\n")
+        file.write("<td><a href='assets/#{asset.assetid_formatted}-#{asset.name}'>#{asset.name}</a></td>\n")
         file.write("</tr>") if (column + 1) % 3 == 0
         column += 1
       end

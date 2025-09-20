@@ -2,6 +2,9 @@ class Asset < ApplicationRecord
   belongs_to :website
   has_many :asset_urls
 
+  ASSETID_FORMAT = "%06d".freeze
+  SAFE_NAME_REPLACEMENT = "_".freeze
+
   def self.asset_for_uri(uri) = AssetUrl.find_by(url: "#{uri.host}#{uri.path}")&.asset
 
   def self.asset_for_url(url) = AssetUrl.find_by(url: url)&.asset
@@ -103,6 +106,26 @@ class Asset < ApplicationRecord
         Nokogiri::HTML(response.body)
       end
   end
+
+  def assetid_formatted = ASSETID_FORMAT % assetid
+
+  def safe_name
+    sname = name.present? ? name : short_name
+    raise "Asset:safe_name missing name or short_name assetid #{asset.assetid}" if sname.blank?
+
+    sname = sname.downcase
+    # Also replace '.' to vaoid suffix confusion.
+    sname = sname.gsub(/[^a-z0-9\-]+/, SAFE_NAME_REPLACEMENT)
+    sname = sname.gsub(/#{SAFE_NAME_REPLACEMENT}+|#{SAFE_NAME_REPLACEMENT}-#{SAFE_NAME_REPLACEMENT}/, SAFE_NAME_REPLACEMENT)
+    sname = sname.gsub(/^#{SAFE_NAME_REPLACEMENT}|#{SAFE_NAME_REPLACEMENT}$/, "")
+    if sname.blank?
+      return "untitled"
+    else
+      sname[0, 200]
+    end
+  end
+
+  def filename_base = "#{assetid_formatted}-#{name.present? ? "#{safe_name}" : "untitled"}"
 
   def content_page? = ["Standard Page", "Asset Listing Page", "DOL Google Sheet viewer", "DOL Largeimage"].include? asset_type
 
