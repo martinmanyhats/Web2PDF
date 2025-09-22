@@ -6,6 +6,7 @@ TODO
 - what to do with attached Word/Excel files
 - pages linked from footer
 - check https://www.deddingtonhistory.uk/buildings/windmillcentre
+- encoding for asset names
 
 Code added to mysource_matrix/core/include/asset.inc:
 

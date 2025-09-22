@@ -1,3 +1,5 @@
+require 'open-uri'
+
 class Website < ApplicationRecord
   has_many :assets, dependent: :destroy
   has_many :webpages, dependent: :destroy
@@ -17,7 +19,7 @@ class Website < ApplicationRecord
     if options[:assetid]
       spider_one(options[:assetid].to_i)
     else
-      spider_all
+      spider_all(options)
     end
     notify_page_list
   end
@@ -40,7 +42,7 @@ class Website < ApplicationRecord
     webpage.spider(follow_links: false)
   end
 
-  def spider_all
+  def spider_all(options)
     root_asset = Asset.find_sole_by(assetid: 93)
     self.root_webpage = Webpage.find_or_initialize_by(asset: root_asset) do |page|
       page.website = self
@@ -54,10 +56,13 @@ class Website < ApplicationRecord
       root_webpage.save!
     end
 
-    # Create pages reachable from sitemap.
-    # spider_sitemap
+    spider_unspidered_webpages
 
-    # Loop until all pages are spidered.
+    # Add in sitemap after content pages have been spidered. Should be redundant as pages should already have been found.
+    spider_sitemap
+  end
+
+  def spider_unspidered_webpages
     loop do
       unspidered_webpages = webpages.where(status: "unspidered").order(:id)
       p "!!! Website::spider unspidered_webpages.count #{unspidered_webpages.count}"
@@ -136,7 +141,6 @@ class Website < ApplicationRecord
   end
 
   def generate_pdf_assets(file_root, options)
-    require 'open-uri'
     p "!!! @pdf_assets.count #{@pdf_assets.count}"
     @pdf_assets.each do |asset|
       p "!!! generate_pdf_assets asset #{asset.inspect}"
@@ -194,7 +198,7 @@ class Website < ApplicationRecord
     File.open(log_filename, "a") { |file| file.puts(message)}
   end
 
-  private
+  # private
 
   def parse_data_asset_url(url, suffix)
     matches = url.match(%r{__data/assets/#{suffix}_file/\d+/(\d+)/(.*\.#{suffix}$)}i)
@@ -211,26 +215,24 @@ class Website < ApplicationRecord
   end
 
   def spider_sitemap
-    p "!!! Website::spider_from_sitemap"
-    body = Webpage::get_body("#{root_webpage.url}/sitemap")
-    document = Nokogiri::HTML(body)
-    # Columns of sitemap.
-    document.css("#main-content > table > tr > td > table").each do |column|
-      p "!!! spidering column #{column.inspect.truncate(400)}"
-      spider_sitemap_fragment(root_webpage, column)
+    p "!!! Website::spider_sitemap"
+    document = Nokogiri::HTML(URI.open("#{url}/sitemap"))
+    document.css("#main-content > table > tr > td > table a").map do |link|
+      p "!!! link #{link.inspect}"
+      next if link.content.starts_with?("((")
+      root_webpage.spider_link(link["href"])
     end
   end
 
-  def spider_sitemap_fragment(parent, fragment)
+  def XXspider_sitemap_fragment(parent, fragment)
     p ">>>> Website::spider_sitemap_fragment parent.id #{parent.id} fragment #{fragment.text.truncate(200)}"
     fragment.xpath("tr/td").each do |child|
       child.xpath("a").each do |link|
-        href = link.attributes["href"].value
-        next unless Webpage.local_html?(url, href)
-        next if href.ends_with?(".pdf")
-        next if href.starts_with?("((")
-        webpage = create_webpage(parent, href, status: "unscraped")
+        p "!!! link.content #{link.content}"
+        next if link.content.starts_with?("((")
+        parent.spider_link(link.attributes["href"].value)
         child.xpath("table").each do |table|
+          p "!!! Website::spider_sitemap_fragment descending"
           spider_sitemap_fragment(webpage, table)
         end
       end

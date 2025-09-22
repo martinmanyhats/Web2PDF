@@ -57,14 +57,12 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_05_094131) do
   create_table "webpages", force: :cascade do |t|
     t.integer "website_id", null: false
     t.integer "asset_id", null: false
-    t.string "title", default: "-"
     t.string "asset_path", null: false
     t.string "status", null: false
     t.float "spider_duration"
     t.string "content"
     t.string "checksum"
     t.string "squiz_canonical_url"
-    t.string "squiz_short_name"
     t.datetime "squiz_updated"
     t.string "squiz_breadcrumbs"
     t.datetime "created_at", null: false

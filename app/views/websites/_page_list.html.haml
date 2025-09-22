@@ -1,10 +1,28 @@
 %div{id: "#{dom_id website}_page_list"}
+  %h2 Unspidered sitemap
+  - unspidered_sitemap_pages = Webpage.where(status: "unspidered")
+  Count: #{unspidered_sitemap_pages.count}
+  %table
+    %thead
+      %th< Asset ID
+      %th< Name
+      %th< URL
+    %tbody
+      - unspidered_sitemap_pages.each do |webpage|
+        %tr
+          %td<= webpage.asset.assetid
+          %td<= webpage.asset.name
+          %td
+            - webpage.asset.asset_urls.each do |asset_url|
+              = link_to asset_url.url, "https://#{asset_url.url}", target: :_blank
+              %br
+  %h2 Pages
   %table
     %tbody
       - website.webpages.order(:asset_path).each do |page|
         %tr
           %td<= linked_page_path(page)
-          %td<= page.title
+          %td<= page.asset.short_name
           %td<= page.asset.assetid
           %td<= page.status
           %td<= page.squiz_canonical_url

@@ -13,17 +13,10 @@ class Webpage < ApplicationRecord
     start_at = Time.now
     url = asset.asset_urls.first.url
 
-    extract_info(asset.document)
+    extract_info_from_document
 
     if follow_links
       spiderable_link_elements(Nokogiri::HTML(content)).map { clean_link(it) }.each { spider_link(it) }
-    end
-
-    false && if squiz_short_name.blank?
-      page_title = asset.document.css("#newpage-title").first&.text
-      self.title = page_title.blank? ? "--" : page_title
-    else
-      self.title = squiz_short_name
     end
 
     self.spider_duration = (Time.now - start_at).seconds
@@ -35,7 +28,7 @@ class Webpage < ApplicationRecord
   end
 
   def spider_link(link, depth = 0)
-    p "!!! Webpage:spider_link link #{link}"
+    p "!!! Webpage:spider_link link #{link} depth #{depth}"
     raise "Webpage:spider_link depth exceeded #{link}" if depth > 3
     raise "Webpage:spider_link link not interpolated #{link} in assetid #{asset.assetid} (#{squiz_short_name}) #{squiz_canonical_url}" if link.include?("./?a=")
     uri = canonicalise(link)
@@ -45,14 +38,7 @@ class Webpage < ApplicationRecord
        uri.path.match?(%r{/(mainmenu|reports|sitemap|testing)}) ||
        uri.path.match?(/\.(jpg|jpeg|png|gif|pdf|doc|docx|xls|xlsx|xml|mp3|js|css|rtf|txt)$/i)
       p "!!! Webpage:spider_link skipping #{link}"
-      return
-    end
-    false && begin
-    return if uri.host != website.host
-    return if uri.path.blank?
-    return unless uri.scheme == "http" || uri.scheme == "https"
-    return if uri.path.match?(%r{/(mainmenu|reports|sitemap|testing)})
-    return if uri.path.match?(/\.(jpg|jpeg|png|gif|pdf|doc|docx|xls|xlsx|xml|mp3|js|css|rtf|txt)$/i)
+      return nil
     end
     p "!!! Webpage:spider_link uri #{uri.host}#{uri.path} from #{asset.assetid}"
     host_path = "#{uri.host}#{uri.path}"
@@ -60,7 +46,7 @@ class Webpage < ApplicationRecord
     p "!!! Webpage:asset #{linked_asset.inspect}"
     if linked_asset.present?
       if linked_asset.content_page?
-        create_webpage(linked_asset)
+        new_webpage = create_webpage(linked_asset)
       elsif linked_asset.redirect_page?
         p "!!! asset.redirect_url #{linked_asset.redirect_url}"
         raise "Webpage:spider_link missing redirect_url linked_asset #{linked_asset.inspect}" unless linked_asset.redirect_url
@@ -73,22 +59,23 @@ class Webpage < ApplicationRecord
       end
     else
       # Ignore problems with links in Google Sheets.
-      return if asset.asset_type == "DOL Google Sheet viewer"
+      return nil if asset.asset_type == "DOL Google Sheet viewer"
       raise "Webpage:spider_link missing asset for host_path #{host_path} webpage #{inspect}"
     end
+    new_webpage
   end
 
   def create_webpage(asset)
     p "!!! Webpage:create_webpage asset #{asset.inspect}"
-    webpage = Webpage.find_or_initialize_by(asset_id: asset.id) do |newpage|
-      p "========== new Webpage assetid #{asset.assetid}"
+    Webpage.find_or_initialize_by(asset_id: asset.id) do |newpage|
+      p "========== new Webpage assetid #{asset.assetid_formatted}"
       newpage.website = website
       newpage.asset_path = "#{asset_path}/#{asset.assetid_formatted}"
       newpage.status = "unspidered"
       newpage.asset = asset
-      p "!!! create_webpage save #{asset.assetid}"
       Rails.logger.silence do
         newpage.save!
+        p "!!! create_webpage saved id #{newpage.id} assetid #{newpage.asset.assetid_formatted} asset_path #{newpage.asset_path}"
       end
     end
   end
@@ -125,42 +112,42 @@ class Webpage < ApplicationRecord
   def extract_info(doc)
     p "!!! extract_info assetid #{asset.assetid}"
     self.squiz_canonical_url = doc.css("link[rel=canonical]").first["href"]
-    self.squiz_short_name = doc.css("meta[name='squiz-short_name']").first&.attribute("content")&.value
     self.squiz_updated = DateTime.iso8601(doc.css("meta[name='squiz-updated_iso8601']").first&.attribute("content")&.value)
-    self.title = doc.css("#newpage-title").first&.text
     self.content =  doc.css("#main-content")&.inner_html
   end
 
   def generate_html_links(parsed_content)
-    spiderable_link_elements(parsed_content).each do |element|
-      p "!!! generate_html_links #{element.inspect}"
-      link = clean_link(element)
-      next if link.blank? # Faulty links in content.
-      uri = canonicalise(link)
-      asset = Asset.asset_for_uri(uri)
-      p "!!! generate_html_links asset #{asset.inspect}"
-      if asset&.redirect_url
-        p "!!! generate_html_links redirect #{asset.redirect_url}"
-        # Spidering has already recursively resolved redirects.
-        asset = Asset.asset_for_url(asset.redirect_url)
-      end
-      next if asset.nil?
-      if asset.content_page?
-        dest_page = Webpage.find_by(asset_id: asset.id)
-        raise "Webpage:generate_html_links cannot find dest_page assetid #{asset.assetid} link #{link} uri #{uri}" unless dest_page
-        p "!!! internally linking to #{uri.to_s} #{dest_page.squiz_short_name}"
-        element.attributes["href"].value = "#{website.webroot}/#{dest_page.asset.filename_base}.pdf"
-      elsif asset.pdf?
-        element.attributes["href"].value = "#{website.webroot}/assets/#{asset.assetid_formatted}-#{asset.name}"
-        website.add_pdf(asset)
-      elsif asset.image?
-        website.add_image(asset)
-      else
-        p ">>>>>>>>>> IGNORING uri #{uri} link#{link}"
-        website.log(:ignored_links, "assetid #{asset.assetid} link #{link}")
-      end
-      # TODO anchors
+    spiderable_link_elements(parsed_content).each(&:generate_html_link)
+  end
+
+  def generate_html_link(element)
+    p "!!! generate_html_link element #{element.inspect}"
+    link = clean_link(element)
+    return if link.blank? # Faulty links in content.
+    uri = canonicalise(link)
+    asset = Asset.asset_for_uri(uri)
+    p "!!! generate_html_link asset #{asset.inspect}"
+    if asset&.redirect_url
+      p "!!! generate_html_link redirect #{asset.redirect_url}"
+      # Spidering has already recursively resolved redirects.
+      asset = Asset.asset_for_url(asset.redirect_url)
     end
+    return if asset.nil?
+    if asset.content_page?
+      dest_page = Webpage.find_by(asset_id: asset.id)
+      raise "Webpage:generate_html_link cannot find dest_page assetid #{asset.assetid} link #{link} uri #{uri}" unless dest_page
+      p "!!! internally linking to #{uri.to_s} #{dest_page.squiz_short_name}"
+      element.attributes["href"].value = "#{website.webroot}/#{dest_page.asset.filename_base}.pdf"
+    elsif asset.pdf?
+      element.attributes["href"].value = "#{website.webroot}/assets/#{asset.assetid_formatted}-#{asset.name}"
+      website.add_pdf(asset)
+    elsif asset.image?
+      website.add_image(asset)
+    else
+      p ">>>>>>>>>> IGNORING uri #{uri} link#{link}"
+      website.log(:ignored_links, "assetid #{asset.assetid} link #{link}")
+    end
+    # TODO anchors
   end
 
   def process_images(body)

@@ -15,7 +15,7 @@
   %ul
     - @webpage.children.each do |child|
       %li
-        = link_to child.title, child
+        = link_to child.asset.short_name, child
         = link_to child.url, child.url
 
 = link_to 'Edit', edit_webpage_path(@webpage)
