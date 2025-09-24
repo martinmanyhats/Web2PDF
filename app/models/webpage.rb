@@ -30,7 +30,7 @@ class Webpage < ApplicationRecord
   def spider_link(link, depth = 0)
     p "!!! Webpage:spider_link link #{link} depth #{depth}"
     raise "Webpage:spider_link depth exceeded #{link}" if depth > 3
-    raise "Webpage:spider_link link not interpolated #{link} in assetid #{asset.assetid} (#{squiz_short_name}) #{squiz_canonical_url}" if link.include?("./?a=")
+    raise "Webpage:spider_link link not interpolated #{link} in assetid #{asset.assetid} #{squiz_canonical_url}" if link.include?("./?a=")
     uri = canonicalise(link)
     if uri.host != website.host ||
        uri.path.blank? ||
@@ -93,6 +93,7 @@ class Webpage < ApplicationRecord
       body["data-assetid"] = asset.assetid_formatted
       body.first_element_child.before(Nokogiri::XML::DocumentFragment.parse(header_html))
       generate_html_links(body)
+      generate_external_links(body)
       # generate_html_images(body)
       file.write(body.to_html)
       file.write("</html>\n")
@@ -107,6 +108,10 @@ class Webpage < ApplicationRecord
     "#{file_root}/#{suffix}/#{asset.assetid_formatted}-#{base}.#{suffix}"
   end
 
+  def title
+    asset.name.present? ? asset.name : asset.short_name
+  end
+
   private
 
   def extract_info(doc)
@@ -117,7 +122,7 @@ class Webpage < ApplicationRecord
   end
 
   def generate_html_links(parsed_content)
-    spiderable_link_elements(parsed_content).each(&:generate_html_link)
+    spiderable_link_elements(parsed_content).each { generate_html_link(it) }
   end
 
   def generate_html_link(element)
@@ -136,7 +141,7 @@ class Webpage < ApplicationRecord
     if asset.content_page?
       dest_page = Webpage.find_by(asset_id: asset.id)
       raise "Webpage:generate_html_link cannot find dest_page assetid #{asset.assetid} link #{link} uri #{uri}" unless dest_page
-      p "!!! internally linking to #{uri.to_s} #{dest_page.squiz_short_name}"
+      p "!!! internally linking to #{uri.to_s} #{dest_page.title}"
       element.attributes["href"].value = "#{website.webroot}/#{dest_page.asset.filename_base}.pdf"
     elsif asset.pdf?
       element.attributes["href"].value = "#{website.webroot}/assets/#{asset.assetid_formatted}-#{asset.name}"
@@ -148,6 +153,13 @@ class Webpage < ApplicationRecord
       website.log(:ignored_links, "assetid #{asset.assetid} link #{link}")
     end
     # TODO anchors
+  end
+
+  def generate_external_links(parsed_content)
+    parsed_content.css("iframe").each do |iframe|
+      p "!!! generate_external_links #{iframe["src"].inspect}"
+      iframe.add_next_sibling("<p class='iframe-comment'>External URL: <a href='#{iframe["src"]}'>#{iframe["src"]}</a></p>")
+    end
   end
 
   def process_images(body)
@@ -205,6 +217,13 @@ class Webpage < ApplicationRecord
                   .compact
   end
 
+  def spiderable_external_elements(parsed_content)
+    # Skip anchors and links with same page.
+    parsed_content.css("iframe")
+                  .select { |a| !a["href"].start_with?("#") }
+                  .compact
+  end
+
   def clean_link(element)
     # TODO remove anchor?
     element.attribute("href").to_s.strip
@@ -254,7 +273,7 @@ class Webpage < ApplicationRecord
   end
 
   def header_html
-    html_title = "<span class='webpage-title'>#{title.present? ? title : squiz_short_name}</span>"
+    html_title = "<span class='webpage-title'>#{title}</span>"
     html_breadcrumbs = "<span class='webpage-breadcrumbs'>#{breadcrumbs_html}</span>"
     "<div class='webpage-header'>#{html_title}#{html_breadcrumbs}</div>"
   end
