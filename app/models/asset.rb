@@ -125,9 +125,21 @@ class Asset < ApplicationRecord
     end
   end
 
+  def url
+    raise "Asset:url missing url" if asset_urls.empty?
+    asset_urls.first.url
+  end
+
+  def filename_from_url
+    raise "Asset:filename_from_url missing url" if asset_urls.empty?
+    matches = url.match(%r{__data/assets/\w+/\d+/\d+/(.*)$})
+    raise "Asset:filename_from_url cannot parse url #{url}" if matches.nil?
+    matches.captures[0]
+  end
+
   def filename_base = "#{assetid_formatted}-#{name.present? ? "#{safe_name}" : "untitled"}"
 
-  def content_page? = ["Standard Page", "Asset Listing Page", "DOL Google Sheet viewer", "DOL Largeimage"].include? asset_type
+  def content_page? = ["Standard Page", "Asset Listing Page", "DOL Google Sheet viewer", "DOL LargeImage"].include? asset_type
 
   def redirect_page? = ["Redirect Page"].include? asset_type
 
@@ -135,7 +147,9 @@ class Asset < ApplicationRecord
 
   def pdf? = ["PDF File"].include? asset_type
 
-  def attachment? = ["MS Excel Document", "File", "MS Word Document", "MP3 File", "Video File"].include? asset_type
+  def office? = ["MS Excel Document", "MS Word Document"].include? asset_type
+
+  def attachment? = ["File", "MS Excel Document", "MS Word Document", "MP3 File", "Video File"].include? asset_type
 
   # include/general.inc
   # function get_asset_hash($assetid)

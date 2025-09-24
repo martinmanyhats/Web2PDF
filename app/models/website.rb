@@ -10,6 +10,7 @@ class Website < ApplicationRecord
 
   attr_reader :webroot
   attr_reader :pdf_assets
+  attr_reader :office_assets
 
   DataAsset = Struct.new(:assetid, :short_name, :filename, :url, :digest)
 
@@ -81,6 +82,7 @@ class Website < ApplicationRecord
     %w[html pdf image assets].each {|subdir| FileUtils.mkdir_p("#{file_root}/#{subdir}")}
     @pdf_assets = Set.new
     @image_assets = Set.new
+    @office_assets = Set.new
     if options[:webroot].present?
       @webroot = options[:webroot]
     else
@@ -93,8 +95,9 @@ class Website < ApplicationRecord
       pages = webpages.where(status: "spidered")
     end
     generate_webpages(file_root, pages)
-    generate_pdf_assets(file_root, options)
-    generate_pdf_toc(file_root, options)
+    # generate_pdf_assets(file_root, options)
+    # generate_pdf_toc(file_root, options)
+    generate_office_assets(file_root, options)
   end
 
   def internal?(url_or_uri)
@@ -116,6 +119,12 @@ class Website < ApplicationRecord
     p "!!! add_image assetid #{asset.assetid}"
     raise "Website:add_image no urls" if asset.asset_urls.empty?
     @image_assets << asset
+  end
+
+  def add_office(asset)
+    p "!!! add_office assetid #{asset.assetid}"
+    raise "Website:add_office no urls" if asset.asset_urls.empty?
+    @office_assets << asset
   end
 
   def generate_webpages(file_root, webpages)
@@ -141,12 +150,13 @@ class Website < ApplicationRecord
   end
 
   def generate_pdf_assets(file_root, options)
-    p "!!! @pdf_assets.count #{@pdf_assets.count}"
+    p "!!! generate_pdf_assets @pdf_assets.count #{@pdf_assets.count}"
     @pdf_assets.each do |asset|
       p "!!! generate_pdf_assets asset #{asset.inspect}"
+      filename = asset.filename_from_url
       url = asset.asset_urls.first.url
-      (pdf_assetid, pdf_filename) = parse_data_asset_url(url, "pdf")
-      copy_filename = "#{file_root}/assets/#{Asset::ASSETID_FORMAT % pdf_assetid}-#{pdf_filename}"
+      # filename = filename_from_url(url, "pdf")
+      copy_filename = "#{file_root}/assets/#{asset.assetid_formatted}-#{filename}"
       IO.copy_stream(URI.open("https://#{url}"), copy_filename)
     end
   end
@@ -164,6 +174,16 @@ class Website < ApplicationRecord
       end
       file.write("</table>\n</html>\n")
       file.close
+    end
+  end
+
+  def generate_office_assets(file_root, options)
+    p "!!! generate_office_assets @office_assets.count #{@office_assets.count}"
+    @office_assets.each do |asset|
+      p "!!! generate_office_assets assetid #{asset.assetid} url #{asset.url}"
+      basename = File.basename(asset.url)
+      pdf_filename = "#{file_root}/assets/#{asset.assetid_formatted}-#{basename}.pdf"
+      Libreconv.convert("https://#{asset.url}", pdf_filename)
     end
   end
 
@@ -200,10 +220,10 @@ class Website < ApplicationRecord
 
   # private
 
-  def parse_data_asset_url(url, suffix)
-    matches = url.match(%r{__data/assets/#{suffix}_file/\d+/(\d+)/(.*\.#{suffix}$)}i)
-    raise "Website:parse_data_asset_url cannot parse url #{url} suffix #{suffix}" if matches.nil?
-    matches.captures
+  def filename_from_url(url, suffix)
+    matches = url.match(%r{__data/assets/(?:#{suffix})_file/\d+/\d+/(.*\.(?:#{suffix})$)}i)
+    raise "Website:filename_from_url cannot parse url #{url} suffix #{suffix}" if matches.nil?
+    matches.captures[1]
   end
 
   def extract_index(root)

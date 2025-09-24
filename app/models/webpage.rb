@@ -148,6 +148,9 @@ class Webpage < ApplicationRecord
       website.add_pdf(asset)
     elsif asset.image?
       website.add_image(asset)
+    elsif asset.office?
+      element.attributes["href"].value = "#{website.webroot}/assets/#{asset.assetid_formatted}-#{asset.name}.pdf"
+      website.add_office(asset)
     else
       p ">>>>>>>>>> IGNORING uri #{uri} link#{link}"
       website.log(:ignored_links, "assetid #{asset.assetid} link #{link}")

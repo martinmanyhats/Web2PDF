@@ -46,9 +46,10 @@ gem "httparty"
 gem "addressable" # URI cannot cope with non-ASCII
 gem "nokogiri"
 gem "ferrum_pdf"
-gem "grover"
-gem "wicked_pdf"
-gem "wkhtmltopdf-binary"
+#gem "grover"
+#gem "wicked_pdf"
+#gem "wkhtmltopdf-binary"
+gem 'libreconv'
 
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
