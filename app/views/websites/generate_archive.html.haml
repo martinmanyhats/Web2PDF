@@ -2,7 +2,7 @@
 %h2 Webpages
 %table
   %tbody
-    - @website.webpages.each do |page|
+    - @website.webpages.includes(:asset).each do |page|
       %tr
         %td<= page.asset.assetid
         %td<= page.squiz_canonical_url

@@ -6,7 +6,6 @@ class Webpage < ApplicationRecord
 
   def spider(follow_links: true)
     p "!!! Webpage:spider #{inspect}"
-    raise "Webpage:spider not unspidered #{inspect}" unless status == "unspidered"
     raise "Webpage:spider missing asset #{inspect}" if asset.nil?
     p ">>>>>> Webpage:spider #{asset.assetid}"
 

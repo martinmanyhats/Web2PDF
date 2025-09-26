@@ -1,5 +1,5 @@
 class WebsitesController < ApplicationController
-  before_action :set_website, only: %i[ show edit update destroy spider generate_pdf ]
+  before_action :set_website, only: %i[ show edit update destroy spider generate_archive ]
 
   # GET /websites or /websites.json
   def index
@@ -70,7 +70,7 @@ class WebsitesController < ApplicationController
     ExtractWebsiteJob.perform_later(@website, options)
   end
 
-  def generate_pdf
+  def generate_archive
     options = {}
     options[:webroot] = params[:webroot] if params[:webroot].present?
     options[:assetid] = params[:assetid].to_i if params[:assetid].present?

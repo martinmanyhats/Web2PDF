@@ -16,10 +16,20 @@
             - webpage.asset.asset_urls.each do |asset_url|
               = link_to asset_url.url, "https://#{asset_url.url}", target: :_blank
               %br
+  %h2 Asset types
+  %table
+    %thead
+      %th Asset type
+      %th Count
+    %tbody
+      - Asset.group(:asset_type).order(:asset_type).count.each_pair do |key, count|
+        %tr
+          %td= key
+          %td= count
   %h2 Pages
   %table
     %tbody
-      - website.webpages.order(:asset_path).each do |page|
+      - website.webpages.includes(:asset).order(:asset_path).each do |page|
         %tr
           %td<= linked_page_path(page)
           %td<= page.asset.short_name

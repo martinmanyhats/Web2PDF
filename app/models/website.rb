@@ -95,8 +95,8 @@ class Website < ApplicationRecord
       pages = webpages.where(status: "spidered")
     end
     generate_webpages(file_root, pages)
-    # generate_pdf_assets(file_root, options)
-    # generate_pdf_toc(file_root, options)
+    generate_pdf_assets(file_root, options)
+    generate_pdf_toc(file_root, options)
     generate_office_assets(file_root, options)
   end
 

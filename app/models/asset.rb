@@ -33,7 +33,11 @@ class Asset < ApplicationRecord
         # p "!!! values #{values.inspect}"
         # p "!!! assetid #{values[1]}"
         Rails.logger.silence do
-          asset = Asset.create(website: website, assetid: values[1], asset_type: values[2], name: values[3], short_name: values[4])
+          asset = Asset.find_or_create_by!(website: website, assetid: values[1]) do |asset|
+            asset.asset_type = values[2]
+            asset.name = values[3]
+            asset.short_name = values[4]
+          end
           url_info = JSON.parse(values[5])
           asset_urls = url_info[0].uniq
           if asset_urls.empty?
@@ -47,10 +51,10 @@ class Asset < ApplicationRecord
             end
           else
             asset_urls.map do |url|
-              raise "Asset:get_published_assets duplicate url #{url} assetid #{asset.assetid}" if AssetUrl.where(url: url).exists?
+              # raise "Asset:get_published_assets duplicate url #{url} assetid #{asset.assetid}" if AssetUrl.where(url: url).exists?
               # Only accumulate URLs for this website.
               # Also suppress bizarro URLs which are likely faulty.
-              if url.starts_with?(website.hostname) && !url.include?("/reports/")
+              if url.starts_with?(website.hostname) && !url.include?("/reports/") && !AssetUrl.where(url: url).exists?
                 asset.asset_urls << AssetUrl.create(url: url)
               end
             end
