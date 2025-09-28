@@ -10,6 +10,7 @@ class Website < ApplicationRecord
 
   attr_reader :webroot
   attr_reader :pdf_assets
+  attr_reader :image_assets
   attr_reader :office_assets
 
   DataAsset = Struct.new(:assetid, :short_name, :filename, :url, :digest)
@@ -79,7 +80,7 @@ class Website < ApplicationRecord
     p "!!! Website:generate_archive options #{options.inspect}"
     file_root = "/tmp/dh"
     FileUtils.remove_entry_secure(file_root) if File.exist?(file_root)
-    %w[html pdf image assets].each {|subdir| FileUtils.mkdir_p("#{file_root}/#{subdir}")}
+    %w[html page pdf image assets].each { |subdir| FileUtils.mkdir_p("#{file_root}/#{subdir}") }
     @pdf_assets = Set.new
     @image_assets = Set.new
     @office_assets = Set.new
@@ -89,15 +90,28 @@ class Website < ApplicationRecord
       @webroot = "file://#{file_root}"
     end
     if options[:assetid].present?
-      asset = Asset.find_by(assetid: options[:assetid])
+      asset = Asset.find_by(assetid: options[:assetid].to_i)
       pages = webpages.where(asset_id: asset.id)
+    elsif options[:assetids].present?
+      assetids = options[:assetids].split(",").map(&:to_i)
+      p "!!! Website:generate_archive assetids #{assetids.inspect}"
+      pages = webpages.where(asset: Asset.where(assetid: assetids))
     else
       pages = webpages.where(status: "spidered")
     end
-    generate_webpages(file_root, pages)
-    generate_pdf_assets(file_root, options)
-    generate_pdf_toc(file_root, options)
-    generate_office_assets(file_root, options)
+    p "!!! Website:generate_archive pages #{pages.inspect}"
+    begin
+      generate_readme(file_root)
+      generate_webpages(file_root, pages)
+      # generate_assets(file_root, @image_assets, "image")
+      # generate_assets(file_root, @pdf_assets, "pdf")
+      # generate_pdf_toc(file_root)
+      # generate_office_assets(file_root)
+    rescue => e
+      raise "Website:generate_archive failed #{e.inspect}"
+    ensure
+      browser.quit
+    end
   end
 
   def internal?(url_or_uri)
@@ -127,41 +141,37 @@ class Website < ApplicationRecord
     @office_assets << asset
   end
 
+  def generate_readme(file_root)
+    p "!!! generate_readme file_root #{file_root}"
+    content = ApplicationController.renderer.render(
+      template: "websites/readme",
+      layout: "metapage",
+      assigns: { xxx: "xxx" }
+    )
+    Browser.instance.html_to_pdf(file_root, "readme", content: content)
+  end
+
   def generate_webpages(file_root, webpages)
     p "!!! Website:generate_webpages count #{webpages.count}"
-    browser = Ferrum::Browser.new(
-      browser_options: {
-        "generate-pdf-document-outline": true
-      }
-    )
     webpages.each do |webpage|
       p "========== Website:generate_archive assetid #{webpage.asset.assetid}"
       html_filename = webpage.generate_html(file_root, html_head)
-      page = browser.create_page
-      page.go_to("file://#{html_filename}")
-      page.pdf(
-        path: webpage.filename_with_assetid(file_root, "pdf"),
-        landscape: true,
-        format: :A4
-      )
-      browser.reset
+      Browser.instance.html_to_pdf(file_root, webpage.basename_with_assetid, filename: html_filename)
     end
-    browser.quit
   end
 
-  def generate_pdf_assets(file_root, options)
-    p "!!! generate_pdf_assets @pdf_assets.count #{@pdf_assets.count}"
-    @pdf_assets.each do |asset|
-      p "!!! generate_pdf_assets asset #{asset.inspect}"
+  def generate_assets(file_root, assets, output_dir)
+    p "!!! generate_assets #{output_dir} assets.count #{assets.count}"
+    assets.each do |asset|
+      p "!!! generate_assets asset #{asset.inspect}"
       filename = asset.filename_from_url
       url = asset.asset_urls.first.url
-      # filename = filename_from_url(url, "pdf")
-      copy_filename = "#{file_root}/assets/#{asset.assetid_formatted}-#{filename}"
+      copy_filename = "#{file_root}/#{output_dir}/#{asset.assetid_formatted}-#{filename}"
       IO.copy_stream(URI.open("https://#{url}"), copy_filename)
     end
   end
 
-  def generate_pdf_toc(file_root, options)
+  def generate_pdf_toc(file_root)
     p "!!! generate_pdf_toc @pdf_assets.size #{@pdf_assets.size}"
     File.open("#{file_root}/toc-pdfs.html", "w") do |file|
       file.write("<html>\n#{html_head}\n<h1>PDF TOC</h1><table>\n")
@@ -177,7 +187,7 @@ class Website < ApplicationRecord
     end
   end
 
-  def generate_office_assets(file_root, options)
+  def generate_office_assets(file_root)
     p "!!! generate_office_assets @office_assets.count #{@office_assets.count}"
     @office_assets.each do |asset|
       p "!!! generate_office_assets assetid #{asset.assetid} url #{asset.url}"
@@ -215,7 +225,7 @@ class Website < ApplicationRecord
         @logs_created[log_filename] = true
       end
     end
-    File.open(log_filename, "a") { |file| file.puts(message)}
+    File.open(log_filename, "a") { |file| file.puts(message) }
   end
 
   # private
@@ -244,21 +254,6 @@ class Website < ApplicationRecord
     end
   end
 
-  def XXspider_sitemap_fragment(parent, fragment)
-    p ">>>> Website::spider_sitemap_fragment parent.id #{parent.id} fragment #{fragment.text.truncate(200)}"
-    fragment.xpath("tr/td").each do |child|
-      child.xpath("a").each do |link|
-        p "!!! link.content #{link.content}"
-        next if link.content.starts_with?("((")
-        parent.spider_link(link.attributes["href"].value)
-        child.xpath("table").each do |table|
-          p "!!! Website::spider_sitemap_fragment descending"
-          spider_sitemap_fragment(webpage, table)
-        end
-      end
-    end
-  end
-
   def create_webpage(parent, url, status: "new")
     p "!!! create_webpage #{url}"
     Webpage.find_or_initialize_by(url: url) do |page|
@@ -275,7 +270,7 @@ class Website < ApplicationRecord
   end
 
   def html_head
-    @_html_head ||= File.read(File.join(Rails.root, 'config', 'website_head.html'))
+    @_html_head ||= File.read(Rails.root.join("app", "views", "websites", "website_head.html"))
   end
 
   def get_squiz_pdf_list(options)
@@ -320,12 +315,12 @@ class Website < ApplicationRecord
     pdfs_by_assetid
   end
 
-  def notify_current_webpage(webpage, notice="NONE")
+  def notify_current_webpage(webpage, notice = "NONE")
     Turbo::StreamsChannel.broadcast_replace_to(
       "web2pdf",
       target: "website_#{self.id}_current_webpage_info",
       partial: "websites/current_webpage_info",
-      locals: {website: self, webpage: webpage, notice: notice}
+      locals: { website: self, webpage: webpage, notice: notice }
     )
   end
 
@@ -334,7 +329,15 @@ class Website < ApplicationRecord
       "web2pdf",
       target: "website_#{self.id}_page_list",
       partial: "websites/page_list",
-      locals: {website: self}
+      locals: { website: self }
+    )
+  end
+
+  def browser
+    @browser ||= Ferrum::Browser.new(
+      browser_options: {
+        "generate-pdf-document-outline": true
+      }
     )
   end
 
@@ -351,6 +354,6 @@ class Website < ApplicationRecord
 
   def log_to_file(filename, message)
     p "!!! log_to_file #{filename}"
-    File.open(filename, "a") { |f| f.puts(message)}
+    File.open(filename, "a") { |f| f.puts(message) }
   end
 end

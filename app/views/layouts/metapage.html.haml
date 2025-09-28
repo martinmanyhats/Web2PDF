@@ -1,0 +1,81 @@
+!!!
+%html
+  %head
+    %meta{:content => "text/html; charset=UTF-8", "http-equiv" => "Content-Type"}/
+    %title= content_for(:title) || "Web2Pdf"
+    = csrf_meta_tags
+    = csp_meta_tag
+    :css
+      body {
+        font-family: "trebuchet ms", verdana, arial, tahoma;
+        font-size: 100%;
+        color: #222;
+        background-color: white;
+        line-height: 135%;
+        margin: 0px;
+        padding: 0px 8px 0px 12px;
+      }
+
+      h2 {
+        font-size: 120%;
+        margin-bottom: 4px;
+      }
+
+      h3 {
+        font-size: 110%;
+        margin-bottom: 2px;
+      }
+
+      h4, h5 {
+        font-size: 100%;
+        margin-bottom: 0px;
+      }
+
+      p {
+        margin-top: 2px;
+        margin-bottom: 6px;
+      }
+
+      ul {
+        margin-top: 2px;
+        margin-bottom: 2px;
+      }
+
+      a:link {
+        color: #0086B2;
+        text-decoration: none;
+      }
+      a:visited {
+        color: #0086B2;
+        text-decoration: none;
+      }
+      a:hover {
+        color: #00A6DC;
+        text-decoration: none;
+        border-bottom: 1px dotted #0086B2;
+      }
+      .title {
+        -webkit-print-color-adjust: exact;
+        break-before: page;
+        margin-bottom: 8px;
+        padding: 8px 0px 8px 8px;
+        background-color: #ede5d3;
+      }
+      h1 {
+        color: #0086B2;
+        font-width: bold;
+        font-size: 140%;
+      }
+      .webpage-timestamp {
+        text-align: right;
+        margin-top:20px;
+        font-size:60%;
+        color:#444;
+      }
+      .webpage-timestamp a {
+        color:#444;
+        text-decoration: none;
+      }
+    = yield :head
+  %body
+    = yield

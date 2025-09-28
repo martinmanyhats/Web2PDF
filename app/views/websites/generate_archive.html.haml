@@ -1,17 +1,33 @@
-%h1 Generate PDF
-%h2 Webpages
+%h1 Generate Archive
+%ul
+  %li
+    %a{href: "#webpages"}< Webpages
+  %li
+    %a{href: "#images"}< Images
+  %li
+    %a{href: "#pdfs"}< PDFs
+%h2{id: "webpages"} Webpages
 %table
   %tbody
     - @website.webpages.includes(:asset).each do |page|
       %tr
         %td<= page.asset.assetid
         %td<= page.squiz_canonical_url
-%h2 PDFs
+%h2{id: "images"} Images
 %table
   %tbody
-    - @website.pdf_assets.each do |asset|
+    - @website.image_assets&.each do |asset|
       %tbody
         %tr
           %td<= asset.assetid
           %td<= asset.name
-          %td<= asset.asset_urls.first.url
+          %td<= asset.url
+%h2{id: "pdfs"} PDFs
+%table
+  %tbody
+    - @website.pdf_assets&.each do |asset|
+      %tbody
+        %tr
+          %td<= asset.assetid
+          %td<= asset.name
+          %td<= asset.url

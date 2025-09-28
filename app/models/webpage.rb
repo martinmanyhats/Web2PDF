@@ -93,7 +93,7 @@ class Webpage < ApplicationRecord
       body.first_element_child.before(Nokogiri::XML::DocumentFragment.parse(header_html))
       generate_html_links(body)
       generate_external_links(body)
-      # generate_html_images(body)
+      # generate_images(body)
       file.write(body.to_html)
       file.write("</html>\n")
       file.close
@@ -102,9 +102,14 @@ class Webpage < ApplicationRecord
     raise "Webpage:generate_html unable to create #{filename}"
   end
 
-  def filename_with_assetid(file_root, suffix)
+  def filename_with_assetid(file_root, suffix, output_dir = nil)
+    output_dir = suffix if output_dir.nil?
+    "#{file_root}/#{output_dir}/#{basename_with_assetid}.#{suffix}"
+  end
+
+  def basename_with_assetid
     base = squiz_canonical_url.gsub(/.*\//, "")
-    "#{file_root}/#{suffix}/#{asset.assetid_formatted}-#{base}.#{suffix}"
+    "#{asset.assetid_formatted}-#{base}"
   end
 
   def title
@@ -141,14 +146,14 @@ class Webpage < ApplicationRecord
       dest_page = Webpage.find_by(asset_id: asset.id)
       raise "Webpage:generate_html_link cannot find dest_page assetid #{asset.assetid} link #{link} uri #{uri}" unless dest_page
       p "!!! internally linking to #{uri.to_s} #{dest_page.title}"
-      element.attributes["href"].value = "#{website.webroot}/#{dest_page.asset.filename_base}.pdf"
+      element.attributes["href"].value = "#{website.webroot}/page/#{dest_page.asset.filename_base}.pdf"
     elsif asset.pdf?
-      element.attributes["href"].value = "#{website.webroot}/assets/#{asset.assetid_formatted}-#{asset.name}"
+      element.attributes["href"].value = "#{website.webroot}/pdf/#{asset.assetid_formatted}-#{asset.name}"
       website.add_pdf(asset)
     elsif asset.image?
       website.add_image(asset)
     elsif asset.office?
-      element.attributes["href"].value = "#{website.webroot}/assets/#{asset.assetid_formatted}-#{asset.name}.pdf"
+      element.attributes["href"].value = "#{website.webroot}/pdf/#{asset.assetid_formatted}-#{asset.name}.pdf"
       website.add_office(asset)
     else
       p ">>>>>>>>>> IGNORING uri #{uri} link#{link}"
@@ -162,6 +167,10 @@ class Webpage < ApplicationRecord
       p "!!! generate_external_links #{iframe["src"].inspect}"
       iframe.add_next_sibling("<p class='iframe-comment'>External URL: <a href='#{iframe["src"]}'>#{iframe["src"]}</a></p>")
     end
+  end
+
+  def generate_images(parsed_content)
+    p "!!! generate_images"
   end
 
   def process_images(body)
@@ -219,6 +228,12 @@ class Webpage < ApplicationRecord
                   .compact
   end
 
+  def spiderable_images(parsed_content)
+    parsed_content.css("img").each do |image|
+      p "!!! image src #{image["src"]}"
+    end
+  end
+
   def spiderable_external_elements(parsed_content)
     # Skip anchors and links with same page.
     parsed_content.css("iframe")
@@ -231,7 +246,7 @@ class Webpage < ApplicationRecord
     element.attribute("href").to_s.strip
   end
 
-  def linked_type(url)
+  def XXlinked_type(url)
     p "!!! linked_type url #{url}"
     uri = canonicalise(url)
     raise "Webpage:linked_type url http://" if uri.to_s == "http://" # Due to empty link
