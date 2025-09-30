@@ -9,6 +9,8 @@ class Asset < ApplicationRecord
 
   def self.asset_for_url(url) = AssetUrl.find_by(url: url)&.asset
 
+  def self.asset_url_for_uri(uri) = AssetUrl.find_sole_by(url: "#{uri.host}#{uri.path}")
+
   def self.XXasset_for_redirection(uri)
     p "!!! asset_for_redirection uri #{uri.inspect}"
     response = HTTParty.head(uri, headers: Website.http_headers, follow_redirects: false)
@@ -95,6 +97,14 @@ class Asset < ApplicationRecord
     end
   end
 
+  def generate(file_root, toc_name)
+    p "!!! generate assetid #{assetid}"
+    filename = filename_from_data_url
+    url = asset_urls.first.url
+    copy_filename = "#{file_root}/#{toc_name.downcase}/#{assetid_formatted}-#{filename}"
+    IO.copy_stream(URI.open("https://#{url}"), copy_filename)
+  end
+
   def document
     @_document ||=
       begin
@@ -134,10 +144,14 @@ class Asset < ApplicationRecord
     asset_urls.first.url
   end
 
-  def filename_from_url
-    raise "Asset:filename_from_url missing url" if asset_urls.empty?
+  def webpages
+    asset_urls.map(&:webpage)
+  end
+
+  def filename_from_data_url
+    raise "Asset:filename_from_data_url missing url" if asset_urls.empty?
     matches = url.match(%r{__data/assets/\w+/\d+/\d+/(.*)$})
-    raise "Asset:filename_from_url cannot parse url #{url}" if matches.nil?
+    raise "Asset:filename_from_data_url cannot parse url #{url}" if matches.nil?
     matches.captures[0]
   end
 

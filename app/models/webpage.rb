@@ -1,6 +1,7 @@
 class Webpage < ApplicationRecord
   belongs_to :website
   belongs_to :asset
+  has_many :webpage_assets
 
   PAGE_NOT_FOUND_SQUIZ_ASSETID = "13267"
 
@@ -10,7 +11,7 @@ class Webpage < ApplicationRecord
     p ">>>>>> Webpage:spider #{asset.assetid}"
 
     start_at = Time.now
-    url = asset.asset_urls.first.url
+    url = asset.url
 
     extract_info_from_document
 
@@ -83,9 +84,9 @@ class Webpage < ApplicationRecord
     extract_info(asset.document)
   end
 
-  def generate_html(file_root, head)
-    raise "Webpage:generate_html not spidered id #{id}" if status != "spidered"
-    filename = filename_with_assetid(file_root, "html")
+  def generate(head)
+    raise "Webpage:generate not spidered id #{id}" if status != "spidered"
+    filename = filename_with_assetid("html")
     File.open(filename, "wb") do |file|
       file.write("<html>\n#{head}\n")
       body = Nokogiri::HTML("<div class='webpage-content'>#{content}</div>").css("body").first
@@ -97,14 +98,16 @@ class Webpage < ApplicationRecord
       file.write(body.to_html)
       file.write("</html>\n")
       file.close
-      return filename
+      save!
+      Browser.instance.html_to_pdf(basename_with_assetid)
+      return
     end
-    raise "Webpage:generate_html unable to create #{filename}"
+    raise "Webpage:generate unable to create #{filename}"
   end
 
-  def filename_with_assetid(file_root, suffix, output_dir = nil)
+  def filename_with_assetid(suffix, output_dir = nil)
     output_dir = suffix if output_dir.nil?
-    "#{file_root}/#{output_dir}/#{basename_with_assetid}.#{suffix}"
+    "#{website.file_root}/#{output_dir}/#{basename_with_assetid}.#{suffix}"
   end
 
   def basename_with_assetid
@@ -135,30 +138,37 @@ class Webpage < ApplicationRecord
     return if link.blank? # Faulty links in content.
     uri = canonicalise(link)
     asset = Asset.asset_for_uri(uri)
-    p "!!! generate_html_link asset #{asset.inspect}"
     if asset&.redirect_url
       p "!!! generate_html_link redirect #{asset.redirect_url}"
       # Spidering has already recursively resolved redirects.
       asset = Asset.asset_for_url(asset.redirect_url)
     end
+    p "!!! generate_html_link uri #{uri} asset #{asset.inspect}"
     return if asset.nil?
     if asset.content_page?
       dest_page = Webpage.find_by(asset_id: asset.id)
       raise "Webpage:generate_html_link cannot find dest_page assetid #{asset.assetid} link #{link} uri #{uri}" unless dest_page
       p "!!! internally linking to #{uri.to_s} #{dest_page.title}"
-      element.attributes["href"].value = "#{website.webroot}/page/#{dest_page.asset.filename_base}.pdf"
-    elsif asset.pdf?
-      element.attributes["href"].value = "#{website.webroot}/pdf/#{asset.assetid_formatted}-#{asset.name}"
+      element.attributes["href"].value = "#{website.web_root}/page/#{dest_page.asset.filename_base}.pdf"
+      return
+    end
+    if asset.pdf?
+      element.attributes["href"].value = "#{website.web_root}/pdf/#{asset.assetid_formatted}-#{asset.name}"
       website.add_pdf(asset)
     elsif asset.image?
       website.add_image(asset)
     elsif asset.office?
-      element.attributes["href"].value = "#{website.webroot}/pdf/#{asset.assetid_formatted}-#{asset.name}.pdf"
+      element.attributes["href"].value = "#{website.web_root}/pdf/#{asset.assetid_formatted}-#{asset.name}.pdf"
       website.add_office(asset)
     else
       p ">>>>>>>>>> IGNORING uri #{uri} link#{link}"
       website.log(:ignored_links, "assetid #{asset.assetid} link #{link}")
+      return
     end
+    p "!!! link #{link} uri #{uri}"
+    asset_url = Asset.asset_url_for_uri(uri)
+    asset_url.webpage = self
+    asset_url.save!
     # TODO anchors
   end
 

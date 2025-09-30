@@ -1,13 +1,21 @@
 class Browser
   include Singleton
 
-  def html_to_pdf(file_root, basename, filename: nil, content: nil)
-    content = File.read(filename) unless filename.nil?
-    html_filename = "#{file_root}/html/#{basename}.html"
-    pdf_filename = "#{file_root}/pdf/#{basename}.pdf"
-    File.write(html_filename, content)
+  def html_to_pdf(basename, content: nil, output_dir: nil)
+    p "!!! html_to_pdf #{basename} #{output_dir}"
+    raise "Browser:html_to_pdf missing file_root" if @file_root.nil?
+    html_filename = "#{@file_root}/html/#{basename}.html"
+    pdf_filename = "#{output_dir.nil? ? "#{@file_root}/pdf" : output_dir}/#{basename}.pdf"
+    p "!!! pdf_filename #{pdf_filename}"
+    if content.present?
+      raise "Browser:html_to_pdf content provided but HTML file already exists #{html_filename}" if File.exist?(html_filename)
+      File.write(html_filename, content)
+    else
+      raise "Browser:html_to_pdf HTML file does not exist #{html_filename}" unless File.exist?(html_filename)
+    end
     page = browser.create_page
     page.go_to("file://#{html_filename}")
+    browser.network.wait_for_idle(timeout: 60)
     page.pdf(
       path: pdf_filename,
       landscape: true,
@@ -16,23 +24,30 @@ class Browser
     browser.reset
   end
 
-  def quit
-    browser.quit
-  end
-
-  def x
-    p "!!! x"
+  def generate(file_root)
+    @file_root = file_root
+    begin
+      yield
+    rescue => e
+      puts e.backtrace
+      raise "Browser:generate failed #{e.inspect}"
+    ensure
+      browser.quit
+      @browser = nil
+      @file_root = nil
+    end
+    p "!!! generate done"
   end
 
   private
 
-  # def initialize
-  # end
-
   def browser
     @browser ||= Ferrum::Browser.new(
       browser_options: {
-        "generate-pdf-document-outline": true
+        timeout: 90,
+        protocol_timeout: 60,
+        "generate-pdf-document-outline": true,
+        browser_options: {"user-agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36"}
       }
     )
   end

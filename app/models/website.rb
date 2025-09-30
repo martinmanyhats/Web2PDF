@@ -8,7 +8,8 @@ class Website < ApplicationRecord
   broadcasts_refreshes
   after_update_commit -> { broadcast_refresh_later }
 
-  attr_reader :webroot
+  attr_reader :web_root
+  attr_reader :file_root
   attr_reader :pdf_assets
   attr_reader :image_assets
   attr_reader :office_assets
@@ -78,16 +79,16 @@ class Website < ApplicationRecord
 
   def generate_archive(options)
     p "!!! Website:generate_archive options #{options.inspect}"
-    file_root = "/tmp/dh"
+    @file_root = "/tmp/dh"
     FileUtils.remove_entry_secure(file_root) if File.exist?(file_root)
     %w[html page pdf image assets].each { |subdir| FileUtils.mkdir_p("#{file_root}/#{subdir}") }
     @pdf_assets = Set.new
     @image_assets = Set.new
     @office_assets = Set.new
     if options[:webroot].present?
-      @webroot = options[:webroot]
+      @web_root = options[:webroot]
     else
-      @webroot = "file://#{file_root}"
+      @web_root = "file://#{@file_root}"
     end
     if options[:assetid].present?
       asset = Asset.find_by(assetid: options[:assetid].to_i)
@@ -100,17 +101,13 @@ class Website < ApplicationRecord
       pages = webpages.where(status: "spidered")
     end
     p "!!! Website:generate_archive pages #{pages.inspect}"
-    begin
-      generate_readme(file_root)
-      generate_webpages(file_root, pages)
-      # generate_assets(file_root, @image_assets, "image")
-      # generate_assets(file_root, @pdf_assets, "pdf")
-      # generate_pdf_toc(file_root)
+    Browser.instance.generate(file_root) do
+      generate_readme(output_dir: file_root)
+      generate_webpages(pages)
+      generate_assets(file_root, "Image", @image_assets)
+      generate_assets(file_root, "PDF", @pdf_assets)
+      generate_assets(file_root, "Office", @office_assets)
       # generate_office_assets(file_root)
-    rescue => e
-      raise "Website:generate_archive failed #{e.inspect}"
-    ensure
-      browser.quit
     end
   end
 
@@ -141,59 +138,66 @@ class Website < ApplicationRecord
     @office_assets << asset
   end
 
-  def generate_readme(file_root)
-    p "!!! generate_readme file_root #{file_root}"
+  def generate_readme(output_dir: nil)
     content = ApplicationController.renderer.render(
       template: "websites/readme",
       layout: "metapage",
       assigns: { xxx: "xxx" }
     )
-    Browser.instance.html_to_pdf(file_root, "readme", content: content)
+    Browser.instance.html_to_pdf("readme", content: content, output_dir: output_dir)
   end
 
-  def generate_webpages(file_root, webpages)
+  def generate_webpages(webpages)
     p "!!! Website:generate_webpages count #{webpages.count}"
-    webpages.each do |webpage|
-      p "========== Website:generate_archive assetid #{webpage.asset.assetid}"
-      html_filename = webpage.generate_html(file_root, html_head)
-      Browser.instance.html_to_pdf(file_root, webpage.basename_with_assetid, filename: html_filename)
+    webpages.each { it.generate(html_head) }
+    generate_webpages_toc(file_root, webpages)
+  end
+
+  def generate_webpages_toc(file_root, webpages)
+    p "!!! Website:generate_webpages_toc count #{webpages.count}"
+    toc_basename = "toc-contents"
+    toc_filename = "#{file_root}/html/#{toc_basename}.html"
+    File.open(toc_filename, "w") do |file|
+      file.write("<html>\n#{html_head}\n<h1>Table of Contents</h1>")
+      file.write("<ul class='webpage-toc-contents'>\n")
+      webpages.sort_by { it.asset_path }.each do |webpage|
+        asset = webpage.asset
+        indent = (12 * (webpage.asset_path.count("/") - 2)).clamp(0, Float::INFINITY)
+        p "!!! indent asset.assetid #{asset.assetid} #{indent} count #{webpage.asset_path.count("/")}"
+        file.write("<li style='padding-left:#{indent}px'><a href='#{webpage.filename_with_assetid("pdf")}'>#{asset.name}</a></td>\n")
+      end
+      file.write("</ul>\n</html>\n")
+      file.close
+      Browser.instance.html_to_pdf(toc_basename)
     end
   end
 
-  def generate_assets(file_root, assets, output_dir)
-    p "!!! generate_assets #{output_dir} assets.count #{assets.count}"
-    assets.each do |asset|
-      p "!!! generate_assets asset #{asset.inspect}"
-      filename = asset.filename_from_url
-      url = asset.asset_urls.first.url
-      copy_filename = "#{file_root}/#{output_dir}/#{asset.assetid_formatted}-#{filename}"
-      IO.copy_stream(URI.open("https://#{url}"), copy_filename)
-    end
+  def generate_assets(file_root, toc_name, assets)
+    p "!!! generate_assets #{toc_name} assets.count #{assets.count}"
+    assets.each { it.generate(file_root, toc_name)}
+    generate_assets_toc(file_root, toc_name, assets)
   end
 
-  def generate_pdf_toc(file_root)
-    p "!!! generate_pdf_toc @pdf_assets.size #{@pdf_assets.size}"
-    File.open("#{file_root}/toc-pdfs.html", "w") do |file|
-      file.write("<html>\n#{html_head}\n<h1>PDF TOC</h1><table>\n")
-      column = 0
-      @pdf_assets.sort_by { it.name.downcase }.each do |asset|
-        file.write("<tr>") if column % 3 == 0
-        file.write("<td><a href='assets/#{asset.assetid_formatted}-#{asset.name}'>#{asset.name}</a></td>\n")
-        file.write("</tr>") if (column + 1) % 3 == 0
-        column += 1
+  def generate_assets_toc(file_root, toc_name, assets)
+    p "!!! generate_assets_toc #{toc_name.downcase} assets.count #{assets.count}"
+    toc_basename = "toc-#{toc_name.downcase}s"
+    toc_filename = "#{file_root}/html/#{toc_basename}.html"
+    File.open(toc_filename, "w") do |file|
+      file.write("<html>\n#{html_head}\n<h1>Table of #{toc_name}s</h1>")
+      file.write("<table><thead><th>#{toc_name}</th><th>Referring page</th></thead>\n")
+      assets.sort_by { it.name.downcase }.each do |asset|
+        references = asset.asset_urls.map do |asset_url|
+          webpage = asset_url.webpage
+          "<a href='#{web_root}/#{webpage.filename_with_assetid("pdf")}'>#{webpage.title}</a>"
+        end.join("<br />")
+        file.write("<tr>")
+        file.write("<td><a href='#{file_root}/#{toc_name.downcase}/#{asset.assetid_formatted}-#{asset.name}'>#{asset.name}</a></td>\n")
+        file.write("<td>#{references}</td\n")
+        file.write("</tr>")
       end
       file.write("</table>\n</html>\n")
       file.close
-    end
-  end
-
-  def generate_office_assets(file_root)
-    p "!!! generate_office_assets @office_assets.count #{@office_assets.count}"
-    @office_assets.each do |asset|
-      p "!!! generate_office_assets assetid #{asset.assetid} url #{asset.url}"
-      basename = File.basename(asset.url)
-      pdf_filename = "#{file_root}/assets/#{asset.assetid_formatted}-#{basename}.pdf"
-      Libreconv.convert("https://#{asset.url}", pdf_filename)
+      Browser.instance.html_to_pdf(toc_basename)
     end
   end
 
@@ -232,7 +236,7 @@ class Website < ApplicationRecord
 
   def filename_from_url(url, suffix)
     matches = url.match(%r{__data/assets/(?:#{suffix})_file/\d+/\d+/(.*\.(?:#{suffix})$)}i)
-    raise "Website:filename_from_url cannot parse url #{url} suffix #{suffix}" if matches.nil?
+    raise "Website:filename_from_data_url cannot parse url #{url} suffix #{suffix}" if matches.nil?
     matches.captures[1]
   end
 
@@ -330,14 +334,6 @@ class Website < ApplicationRecord
       target: "website_#{self.id}_page_list",
       partial: "websites/page_list",
       locals: { website: self }
-    )
-  end
-
-  def browser
-    @browser ||= Ferrum::Browser.new(
-      browser_options: {
-        "generate-pdf-document-outline": true
-      }
     )
   end
 

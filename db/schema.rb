@@ -14,10 +14,12 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_05_094131) do
   create_table "asset_urls", force: :cascade do |t|
     t.string "url"
     t.integer "asset_id", null: false
+    t.integer "webpage_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["asset_id"], name: "index_asset_urls_on_asset_id"
     t.index ["url"], name: "index_asset_urls_on_url", unique: true
+    t.index ["webpage_id"], name: "index_asset_urls_on_webpage_id"
   end
 
   create_table "assets", force: :cascade do |t|
@@ -90,6 +92,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_05_094131) do
   end
 
   add_foreign_key "asset_urls", "assets"
+  add_foreign_key "asset_urls", "webpages"
   add_foreign_key "assets", "websites"
   add_foreign_key "pdfs", "websites"
   add_foreign_key "webpages", "assets"
