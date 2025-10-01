@@ -7,24 +7,9 @@ class Asset < ApplicationRecord
 
   def self.asset_for_uri(uri) = AssetUrl.find_by(url: "#{uri.host}#{uri.path}")&.asset
 
-  def self.asset_for_url(url) = AssetUrl.find_by(url: url)&.asset
+  def self.asset_for_host_path(host_path) = AssetUrl.find_sole_by(url: host_path).asset
 
   def self.asset_url_for_uri(uri) = AssetUrl.find_sole_by(url: "#{uri.host}#{uri.path}")
-
-  def self.XXasset_for_redirection(uri)
-    p "!!! asset_for_redirection uri #{uri.inspect}"
-    response = HTTParty.head(uri, headers: Website.http_headers, follow_redirects: false)
-    p "!!! asset_for_redirection response #{response.inspect}"
-    if response.code >= 300 && response.code < 400
-      location = URI.parse(response["location"])
-      asset = asset_for_url("#{location.host}#{location.path}")
-      raise "Asset:asset_for_redirection not found uri #{uri}" unless asset
-      p "!!! asset #{asset.inspect}"
-    else
-      raise "Asset:asset_for_redirection not a redirection code #{response.code} uri #{uri}"
-    end
-    asset
-  end
 
   def self.get_published_assets(website)
     p "!!! get_published_assets"

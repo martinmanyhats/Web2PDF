@@ -80,8 +80,8 @@ class Website < ApplicationRecord
   def generate_archive(options)
     p "!!! Website:generate_archive options #{options.inspect}"
     @file_root = "/tmp/dh"
-    FileUtils.remove_entry_secure(file_root) if File.exist?(file_root)
-    %w[html page pdf image assets].each { |subdir| FileUtils.mkdir_p("#{file_root}/#{subdir}") }
+    FileUtils.remove_entry_secure(@file_root) if File.exist?(@file_root)
+    %w[html page pdf image assets].each { |subdir| FileUtils.mkdir_p("#{@file_root}/#{subdir}") }
     @pdf_assets = Set.new
     @image_assets = Set.new
     @office_assets = Set.new
@@ -101,13 +101,13 @@ class Website < ApplicationRecord
       pages = webpages.where(status: "spidered")
     end
     p "!!! Website:generate_archive pages #{pages.inspect}"
-    Browser.instance.generate(file_root) do
-      generate_readme(output_dir: file_root)
-      generate_webpages(pages)
-      generate_assets(file_root, "Image", @image_assets)
-      generate_assets(file_root, "PDF", @pdf_assets)
-      generate_assets(file_root, "Office", @office_assets)
-      # generate_office_assets(file_root)
+    Browser.instance.generate(@file_root) do
+      generate_readme
+      #generate_webpages(pages)
+      generate_sitemap
+      #generate_assets("Image", @image_assets)
+      #generate_assets("PDF", @pdf_assets)
+      #generate_assets("Office", @office_assets)
     end
   end
 
@@ -138,25 +138,25 @@ class Website < ApplicationRecord
     @office_assets << asset
   end
 
-  def generate_readme(output_dir: nil)
+  def generate_readme
     content = ApplicationController.renderer.render(
       template: "websites/readme",
       layout: "metapage",
       assigns: { xxx: "xxx" }
     )
-    Browser.instance.html_to_pdf("readme", content: content, output_dir: output_dir)
+    Browser.instance.html_to_pdf("readme", content: content, output_dir: @file_root)
   end
 
   def generate_webpages(webpages)
     p "!!! Website:generate_webpages count #{webpages.count}"
     webpages.each { it.generate(html_head) }
-    generate_webpages_toc(file_root, webpages)
+    generate_webpages_toc(webpages)
   end
 
-  def generate_webpages_toc(file_root, webpages)
+  def generate_webpages_toc(webpages)
     p "!!! Website:generate_webpages_toc count #{webpages.count}"
     toc_basename = "toc-contents"
-    toc_filename = "#{file_root}/html/#{toc_basename}.html"
+    toc_filename = "#{@file_root}/html/#{toc_basename}.html"
     File.open(toc_filename, "w") do |file|
       file.write("<html>\n#{html_head}\n<h1>Table of Contents</h1>")
       file.write("<ul class='webpage-toc-contents'>\n")
@@ -172,16 +172,34 @@ class Website < ApplicationRecord
     end
   end
 
-  def generate_assets(file_root, toc_name, assets)
-    p "!!! generate_assets #{toc_name} assets.count #{assets.count}"
-    assets.each { it.generate(file_root, toc_name)}
-    generate_assets_toc(file_root, toc_name, assets)
+  def generate_sitemap
+    p "!!! Website:generate_sitemap"
+    document = Nokogiri::HTML(URI.open("#{url}/sitemap"))
+    File.open("#{@file_root}/html/sitemap.html", "w") do |file|
+      file.write("<html>\n#{html_head}\n<h1>Sitemap</h1>\n<ul class='webpage-toc-contents'>\n")
+      document.css("#main-content > table > tr > td > table a").map do |link|
+        p "!!! generate_sitemap link #{link.inspect}"
+        next if link.content.starts_with?("((")
+        depth = link.css_path.scan(/table/).count - 2
+        url = canonical_url_for_url(link["href"])
+        file.write("<li style='padding-left:#{depth * 8}px'><a href='#{url}'>#{link.content}</li>\n")
+      end
+      file.write("</ul>\n</html>\n")
+      file.close
+      Browser.instance.html_to_pdf("sitemap")
+    end
   end
 
-  def generate_assets_toc(file_root, toc_name, assets)
+  def generate_assets(toc_name, assets)
+    p "!!! generate_assets #{toc_name} assets.count #{assets.count}"
+    assets.each { it.generate(@file_root, toc_name)}
+    generate_assets_toc(toc_name, assets)
+  end
+
+  def generate_assets_toc(toc_name, assets)
     p "!!! generate_assets_toc #{toc_name.downcase} assets.count #{assets.count}"
     toc_basename = "toc-#{toc_name.downcase}s"
-    toc_filename = "#{file_root}/html/#{toc_basename}.html"
+    toc_filename = "#{@file_root}/html/#{toc_basename}.html"
     File.open(toc_filename, "w") do |file|
       file.write("<html>\n#{html_head}\n<h1>Table of #{toc_name}s</h1>")
       file.write("<table><thead><th>#{toc_name}</th><th>Referring page</th></thead>\n")
@@ -191,7 +209,7 @@ class Website < ApplicationRecord
           "<a href='#{web_root}/#{webpage.filename_with_assetid("pdf")}'>#{webpage.title}</a>"
         end.join("<br />")
         file.write("<tr>")
-        file.write("<td><a href='#{file_root}/#{toc_name.downcase}/#{asset.assetid_formatted}-#{asset.name}'>#{asset.name}</a></td>\n")
+        file.write("<td><a href='#{@file_root}/#{toc_name.downcase}/#{asset.assetid_formatted}-#{asset.name}'>#{asset.name}</a></td>\n")
         file.write("<td>#{references}</td\n")
         file.write("</tr>")
       end
@@ -230,6 +248,37 @@ class Website < ApplicationRecord
       end
     end
     File.open(log_filename, "a") { |file| file.puts(message) }
+  end
+
+  def canonicalise(url_or_uri)
+    # p "!!! canonicalise #{url_or_uri.inspect}"
+    uri = if url_or_uri.kind_of?(String)
+            url_or_uri = url_or_uri.strip
+            url_or_uri = "https://#{url_or_uri}" unless url_or_uri =~ /^https?:\/\//
+            Addressable::URI.parse(url_or_uri)
+          else
+            url_or_uri
+          end
+    return uri if uri.scheme == "mailto"
+    website_host = Addressable::URI.parse(url).host
+    if uri.host.blank?
+      uri.host = website_host
+    end
+    if uri.host == website_host
+      if uri.scheme == "http"
+        uri.scheme = "https"
+      end
+      if uri.path&.ends_with?("/")
+        uri.path = uri.path.chop
+      end
+    end
+    if uri.scheme.blank?
+      uri.scheme = "https"
+    end
+    uri.fragment = nil
+    uri.query = nil
+    # p "!!! canonicalise result #{uri.inspect}"
+    uri
   end
 
   # private
@@ -271,6 +320,23 @@ class Website < ApplicationRecord
       end
     end
     notify_current_webpage(webpage, "created")
+  end
+
+  def canonical_url_for_url(url)
+    uri = canonicalise(url)
+    return url if uri.host != host
+    p "!!! canonical_url_for_url #{url} uri #{uri}"
+    # Some redirected links are direct to a PDF.
+    return url if uri.path.match?(/.pdf$/i)
+    asset = Asset.asset_for_uri(uri)
+    if asset.content_page?
+      Webpage.find_sole_by(asset: asset).squiz_canonical_url
+    elsif asset.redirect_page?
+      p "!!! canonical_url_for_url redirecting to #{asset.redirect_url}"
+      canonical_url_for_url(asset.redirect_url)
+    else
+      url
+    end
   end
 
   def html_head

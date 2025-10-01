@@ -3,7 +3,8 @@ class Webpage < ApplicationRecord
   belongs_to :asset
   has_many :webpage_parents
 
-  PAGE_NOT_FOUND_SQUIZ_ASSETID = "13267"
+  HOME_SQUIZ_ASSETID = 93
+  PAGE_NOT_FOUND_SQUIZ_ASSETID = 13267
 
   def spider(follow_links: true)
     p "!!! Webpage:spider #{inspect}"
@@ -31,7 +32,7 @@ class Webpage < ApplicationRecord
     p "!!! Webpage:spider_link link #{link} depth #{depth}"
     raise "Webpage:spider_link depth exceeded #{link}" if depth > 3
     raise "Webpage:spider_link link not interpolated #{link} in assetid #{assetid} #{squiz_canonical_url}" if link.include?("./?a=")
-    uri = canonicalise(link)
+    uri = website.canonicalise(link)
     if uri.host != website.host ||
        uri.path.blank? ||
        !(uri.scheme == "http" || uri.scheme == "https") ||
@@ -42,7 +43,7 @@ class Webpage < ApplicationRecord
     end
     p "!!! Webpage:spider_link uri #{uri.host}#{uri.path} from #{assetid}"
     host_path = "#{uri.host}#{uri.path}"
-    linked_asset = Asset.asset_for_url(host_path)
+    linked_asset = Asset.asset_for_host_path(host_path)
     p "!!! Webpage:asset #{linked_asset.inspect}"
     if linked_asset.present?
       if linked_asset.content_page?
@@ -73,18 +74,9 @@ class Webpage < ApplicationRecord
       newpage.status = "unspidered"
       newpage.asset = asset
     end
-    p "*** existing webpage_parents #{page.parent_assetids}"
     unless page.webpage_parents.where(webpage: page, parent: self).exists?
-      p "*** adding webpage_parent assetid #{self.assetid} to #{page.assetid}"
-      new_webpage_parent = WebpageParent.build(webpage: page, parent: self)
-      p "!!! new_parent #{new_webpage_parent.inspect}"
-      page.webpage_parents << new_webpage_parent
-      p "!!! new parents #{page.webpage_parents.inspect}"
-      # raise "XX" if page.webpage_parents.count > 1
-    else
-      p "*** NOT adding webpage_parent assetid to #{self.assetid}"
+      page.webpage_parents << WebpageParent.build(webpage: page, parent: self)
     end
-    p "*** new webpage_parents #{page.parent_assetids}}"
     Rails.logger.silence do
       page.save!
       p "!!! create_or_update_webpage saved id #{page.id} assetid #{page.assetid_formatted} parents #{page.parent_assetids}"
@@ -138,6 +130,13 @@ class Webpage < ApplicationRecord
     asset.name.present? ? asset.name : asset.short_name
   end
 
+  def XXpaths
+    p "!!! paths assetid #{assetid} parents #{parent_assetids.inspect}"
+    sleep(2)
+    return nil if home_page?
+    parents.select { !it.home_page? }.map { [it, it.paths] }
+  end
+
   def assetid = asset.assetid
 
   def assetid_formatted = asset.assetid_formatted
@@ -159,12 +158,12 @@ class Webpage < ApplicationRecord
     p "!!! generate_html_link element #{element.inspect}"
     link = clean_link(element)
     return if link.blank? # Faulty links in content.
-    uri = canonicalise(link)
+    uri = website.canonicalise(link)
     asset = Asset.asset_for_uri(uri)
     if asset&.redirect_url
       p "!!! generate_html_link redirect #{asset.redirect_url}"
       # Spidering has already recursively resolved redirects.
-      asset = Asset.asset_for_url(asset.redirect_url)
+      asset = Asset.asset_for_host_path(asset.redirect_url)
     end
     p "!!! generate_html_link uri #{uri} asset #{asset.inspect}"
     return if asset.nil?
@@ -223,37 +222,6 @@ class Webpage < ApplicationRecord
     end
   end
 
-  def canonicalise(url_or_uri)
-    # p "!!! canonicalise #{url_or_uri.inspect}"
-    uri = if url_or_uri.kind_of?(String)
-            url_or_uri = url_or_uri.strip
-            url_or_uri = "https://#{url_or_uri}" unless url_or_uri =~ /^https?:\/\//
-            Addressable::URI.parse(url_or_uri)
-          else
-            url_or_uri
-    end
-    return uri if uri.scheme == "mailto"
-    website_host = Addressable::URI.parse(website.url).host
-    if uri.host.blank?
-      uri.host = website_host
-    end
-    if uri.host == website_host
-      if uri.scheme == "http"
-        uri.scheme = "https"
-      end
-      if uri.path&.ends_with?("/")
-        uri.path = uri.path.chop
-      end
-    end
-    if uri.scheme.blank?
-      uri.scheme = "https"
-    end
-    uri.fragment = nil
-    uri.query = nil
-    # p "!!! canonicalise result #{uri.inspect}"
-    uri
-  end
-
   def spiderable_link_elements(parsed_content)
     # Skip anchors and links with same page.
     parsed_content.css("a[href]")
@@ -309,7 +277,11 @@ class Webpage < ApplicationRecord
     crumbs.join("\n")
   end
 
-  def is_page_not_found?
-    squiz_assetid == PAGE_NOT_FOUND_SQUIZ_ASSETID
+  def home_page?
+    assetid == HOME_SQUIZ_ASSETID
+  end
+
+  def page_not_found_page?
+    assetid == PAGE_NOT_FOUND_SQUIZ_ASSETID
   end
 end
