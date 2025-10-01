@@ -49,7 +49,7 @@ class Website < ApplicationRecord
     root_asset = Asset.find_sole_by(assetid: 93)
     self.root_webpage = Webpage.find_or_initialize_by(asset: root_asset) do |page|
       page.website = self
-      page.asset_path = "/#{root_asset.assetid_formatted}"
+      page.webpage_parents = []
       page.status = "unspidered"
       page.squiz_canonical_url = "#{url}"
     end
@@ -259,7 +259,7 @@ class Website < ApplicationRecord
   end
 
   def create_webpage(parent, url, status: "new")
-    p "!!! create_webpage #{url}"
+    p "!!! create_or_update_webpage #{url}"
     Webpage.find_or_initialize_by(url: url) do |page|
       page.website = parent.website
       page.parent = parent

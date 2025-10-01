@@ -29,10 +29,10 @@
   %h2 Pages
   %table
     %tbody
-      - website.webpages.includes(:asset).order(:asset_path).each do |page|
+      - website.webpages.includes(:asset).order(:id).each do |page|
         %tr
-          %td<= linked_page_path(page)
           %td<= page.asset.short_name
           %td<= page.asset.assetid
           %td<= page.status
           %td<= page.squiz_canonical_url
+          %td<= page.parent_assetids.inspect

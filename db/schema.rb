@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_09_05_094131) do
+ActiveRecord::Schema[8.0].define(version: 2025_09_30_142319) do
   create_table "asset_urls", force: :cascade do |t|
     t.string "url"
     t.integer "asset_id", null: false
@@ -56,10 +56,18 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_05_094131) do
     t.datetime "updated_at", null: false
   end
 
+  create_table "webpage_parents", force: :cascade do |t|
+    t.integer "webpage_id"
+    t.integer "parent_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["parent_id"], name: "index_webpage_parents_on_parent_id"
+    t.index ["webpage_id"], name: "index_webpage_parents_on_webpage_id"
+  end
+
   create_table "webpages", force: :cascade do |t|
     t.integer "website_id", null: false
     t.integer "asset_id", null: false
-    t.string "asset_path", null: false
     t.string "status", null: false
     t.float "spider_duration"
     t.string "content"
@@ -95,6 +103,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_05_094131) do
   add_foreign_key "asset_urls", "webpages"
   add_foreign_key "assets", "websites"
   add_foreign_key "pdfs", "websites"
+  add_foreign_key "webpage_parents", "webpages"
+  add_foreign_key "webpage_parents", "webpages", column: "parent_id"
   add_foreign_key "webpages", "assets"
   add_foreign_key "webpages", "websites"
   add_foreign_key "websites", "webpages", column: "root_webpage_id"

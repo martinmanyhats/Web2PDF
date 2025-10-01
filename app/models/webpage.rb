@@ -1,14 +1,14 @@
 class Webpage < ApplicationRecord
   belongs_to :website
   belongs_to :asset
-  has_many :webpage_assets
+  has_many :webpage_parents
 
   PAGE_NOT_FOUND_SQUIZ_ASSETID = "13267"
 
   def spider(follow_links: true)
     p "!!! Webpage:spider #{inspect}"
     raise "Webpage:spider missing asset #{inspect}" if asset.nil?
-    p ">>>>>> Webpage:spider #{asset.assetid}"
+    p ">>>>>> Webpage:spider #{assetid}"
 
     start_at = Time.now
     url = asset.url
@@ -21,7 +21,7 @@ class Webpage < ApplicationRecord
 
     self.spider_duration = (Time.now - start_at).seconds
     self.status = "spidered"
-    p "!!! Webpage:spider save #{asset.assetid}"
+    p "!!! Webpage:spider save #{assetid}"
     Rails.logger.silence do
       save!
     end
@@ -30,7 +30,7 @@ class Webpage < ApplicationRecord
   def spider_link(link, depth = 0)
     p "!!! Webpage:spider_link link #{link} depth #{depth}"
     raise "Webpage:spider_link depth exceeded #{link}" if depth > 3
-    raise "Webpage:spider_link link not interpolated #{link} in assetid #{asset.assetid} #{squiz_canonical_url}" if link.include?("./?a=")
+    raise "Webpage:spider_link link not interpolated #{link} in assetid #{assetid} #{squiz_canonical_url}" if link.include?("./?a=")
     uri = canonicalise(link)
     if uri.host != website.host ||
        uri.path.blank? ||
@@ -40,13 +40,13 @@ class Webpage < ApplicationRecord
       p "!!! Webpage:spider_link skipping #{link}"
       return nil
     end
-    p "!!! Webpage:spider_link uri #{uri.host}#{uri.path} from #{asset.assetid}"
+    p "!!! Webpage:spider_link uri #{uri.host}#{uri.path} from #{assetid}"
     host_path = "#{uri.host}#{uri.path}"
     linked_asset = Asset.asset_for_url(host_path)
     p "!!! Webpage:asset #{linked_asset.inspect}"
     if linked_asset.present?
       if linked_asset.content_page?
-        new_webpage = create_webpage(linked_asset)
+        new_webpage = create_or_update_webpage(linked_asset)
       elsif linked_asset.redirect_page?
         p "!!! asset.redirect_url #{linked_asset.redirect_url}"
         raise "Webpage:spider_link missing redirect_url linked_asset #{linked_asset.inspect}" unless linked_asset.redirect_url
@@ -65,19 +65,38 @@ class Webpage < ApplicationRecord
     new_webpage
   end
 
-  def create_webpage(asset)
-    p "!!! Webpage:create_webpage asset #{asset.inspect}"
-    Webpage.find_or_initialize_by(asset_id: asset.id) do |newpage|
-      p "========== new Webpage assetid #{asset.assetid_formatted}"
+  def create_or_update_webpage(asset)
+    p "!!! Webpage:create_or_update_webpage asset parent #{self.assetid} #{asset.inspect}"
+    page = Webpage.find_or_initialize_by(asset_id: asset.id) do |newpage|
+      p "========== new Webpage assetid #{assetid_formatted}"
       newpage.website = website
-      newpage.asset_path = "#{asset_path}/#{asset.assetid_formatted}"
       newpage.status = "unspidered"
       newpage.asset = asset
-      Rails.logger.silence do
-        newpage.save!
-        p "!!! create_webpage saved id #{newpage.id} assetid #{newpage.asset.assetid_formatted} asset_path #{newpage.asset_path}"
-      end
     end
+    p "*** existing webpage_parents #{page.parent_assetids}"
+    unless page.webpage_parents.where(webpage: page, parent: self).exists?
+      p "*** adding webpage_parent assetid #{self.assetid} to #{page.assetid}"
+      new_webpage_parent = WebpageParent.build(webpage: page, parent: self)
+      p "!!! new_parent #{new_webpage_parent.inspect}"
+      page.webpage_parents << new_webpage_parent
+      p "!!! new parents #{page.webpage_parents.inspect}"
+      # raise "XX" if page.webpage_parents.count > 1
+    else
+      p "*** NOT adding webpage_parent assetid to #{self.assetid}"
+    end
+    p "*** new webpage_parents #{page.parent_assetids}}"
+    Rails.logger.silence do
+      page.save!
+      p "!!! create_or_update_webpage saved id #{page.id} assetid #{page.assetid_formatted} parents #{page.parent_assetids}"
+    end
+  end
+
+  def parents
+    webpage_parents.map(&:parent)
+  end
+
+  def parent_assetids
+    webpage_parents.map { it.parent.assetid }
   end
 
   def extract_info_from_document
@@ -90,7 +109,7 @@ class Webpage < ApplicationRecord
     File.open(filename, "wb") do |file|
       file.write("<html>\n#{head}\n")
       body = Nokogiri::HTML("<div class='webpage-content'>#{content}</div>").css("body").first
-      body["data-assetid"] = asset.assetid_formatted
+      body["data-assetid"] = assetid_formatted
       body.first_element_child.before(Nokogiri::XML::DocumentFragment.parse(header_html))
       generate_html_links(body)
       generate_external_links(body)
@@ -112,17 +131,21 @@ class Webpage < ApplicationRecord
 
   def basename_with_assetid
     base = squiz_canonical_url.gsub(/.*\//, "")
-    "#{asset.assetid_formatted}-#{base}"
+    "#{assetid_formatted}-#{base}"
   end
 
   def title
     asset.name.present? ? asset.name : asset.short_name
   end
 
+  def assetid = asset.assetid
+
+  def assetid_formatted = asset.assetid_formatted
+
   private
 
   def extract_info(doc)
-    p "!!! extract_info assetid #{asset.assetid}"
+    p "!!! extract_info assetid #{assetid}"
     self.squiz_canonical_url = doc.css("link[rel=canonical]").first["href"]
     self.squiz_updated = DateTime.iso8601(doc.css("meta[name='squiz-updated_iso8601']").first&.attribute("content")&.value)
     self.content =  doc.css("#main-content")&.inner_html
@@ -147,22 +170,22 @@ class Webpage < ApplicationRecord
     return if asset.nil?
     if asset.content_page?
       dest_page = Webpage.find_by(asset_id: asset.id)
-      raise "Webpage:generate_html_link cannot find dest_page assetid #{asset.assetid} link #{link} uri #{uri}" unless dest_page
+      raise "Webpage:generate_html_link cannot find dest_page assetid #{assetid} link #{link} uri #{uri}" unless dest_page
       p "!!! internally linking to #{uri.to_s} #{dest_page.title}"
       element.attributes["href"].value = "#{website.web_root}/page/#{dest_page.asset.filename_base}.pdf"
       return
     end
     if asset.pdf?
-      element.attributes["href"].value = "#{website.web_root}/pdf/#{asset.assetid_formatted}-#{asset.name}"
+      element.attributes["href"].value = "#{website.web_root}/pdf/#{assetid_formatted}-#{asset.name}"
       website.add_pdf(asset)
     elsif asset.image?
       website.add_image(asset)
     elsif asset.office?
-      element.attributes["href"].value = "#{website.web_root}/pdf/#{asset.assetid_formatted}-#{asset.name}.pdf"
+      element.attributes["href"].value = "#{website.web_root}/pdf/#{assetid_formatted}-#{asset.name}.pdf"
       website.add_office(asset)
     else
       p ">>>>>>>>>> IGNORING uri #{uri} link#{link}"
-      website.log(:ignored_links, "assetid #{asset.assetid} link #{link}")
+      website.log(:ignored_links, "assetid #{assetid} link #{link}")
       return
     end
     p "!!! link #{link} uri #{uri}"
@@ -254,33 +277,6 @@ class Webpage < ApplicationRecord
   def clean_link(element)
     # TODO remove anchor?
     element.attribute("href").to_s.strip
-  end
-
-  def XXlinked_type(url)
-    p "!!! linked_type url #{url}"
-    uri = canonicalise(url)
-    raise "Webpage:linked_type url http://" if uri.to_s == "http://" # Due to empty link
-    ltype = begin
-              if uri.path.blank? || !(uri.scheme == "http" || uri.scheme == "https") || uri.path.match?(%r{/(mainmenu|reports)\/})
-                nil
-              elsif uri.host != website.host
-                "offsite"
-              elsif uri.path.match?(/\.pdf$/i)
-                "pdf"
-              elsif uri.path.match?(/\.(jpg|jpeg|png|gif)$/i)
-                "image"
-              else
-                # Might be a redirect.
-                if new_url = resolve_redirection(url)
-                  p "!!! new url #{new_url}"
-                  linked_type(new_url)
-                else
-                  "webpage"
-                end
-              end
-            end
-    p "!!! linked_type ltype #{ltype}"
-    ltype
   end
 
   def resolve_redirection(url)
