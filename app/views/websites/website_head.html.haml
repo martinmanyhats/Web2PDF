@@ -1,5 +1,8 @@
-<head>
-    <style media="all">
+%head
+    %title<
+        = title
+        = website.name
+    :css
         body {
             font-family: "trebuchet ms", verdana, arial, tahoma;
             font-size: 100%;
@@ -492,7 +495,7 @@
         }
 
         .book-toc-title {
-            display: block-inline;
+            display: inline-block;
             width: 400px;
         }
 
@@ -604,11 +607,12 @@
             border-spacing: 12px 0px;
         }
         .webpage-toc-contents {
-            column-count: 2;
-            column-gap: 20px;
+            Xcolumn-count: 2;
+            Xcolumn-gap: 20px;
         }
         .webpage-toc-contents li {
             list-style: none;
+            break-inside: avoid;
         }
         .webpage-timestamp {
             text-align: right;
@@ -620,5 +624,8 @@
             color:#444;
             text-decoration: none;
         }
-    </style>
-</head>
+        @media print {
+            .webpage-toc-contents li {
+                page-break-inside: avoid;
+            }
+        }

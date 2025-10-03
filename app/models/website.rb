@@ -103,11 +103,11 @@ class Website < ApplicationRecord
     p "!!! Website:generate_archive pages #{pages.inspect}"
     Browser.instance.generate(@file_root) do
       generate_readme
-      #generate_webpages(pages)
+      generate_webpages(pages)
       generate_sitemap
-      #generate_assets("Image", @image_assets)
-      #generate_assets("PDF", @pdf_assets)
-      #generate_assets("Office", @office_assets)
+      generate_assets("Image", @image_assets)
+      generate_assets("PDF", @pdf_assets)
+      generate_assets("Office", @office_assets)
     end
   end
 
@@ -149,8 +149,8 @@ class Website < ApplicationRecord
 
   def generate_webpages(webpages)
     p "!!! Website:generate_webpages count #{webpages.count}"
-    webpages.each { it.generate(html_head) }
-    generate_webpages_toc(webpages)
+    webpages.each { it.generate(html_head(title: it.asset.short_name)) }
+    # generate_webpages_toc(webpages)
   end
 
   def generate_webpages_toc(webpages)
@@ -158,7 +158,7 @@ class Website < ApplicationRecord
     toc_basename = "toc-contents"
     toc_filename = "#{@file_root}/html/#{toc_basename}.html"
     File.open(toc_filename, "w") do |file|
-      file.write("<html>\n#{html_head}\n<h1>Table of Contents</h1>")
+      file.write("<html>\n#{html_head(title: "Contents")}\n<h1>Table of Contents</h1>")
       file.write("<ul class='webpage-toc-contents'>\n")
       webpages.sort_by { it.asset_path }.each do |webpage|
         asset = webpage.asset
@@ -176,7 +176,7 @@ class Website < ApplicationRecord
     p "!!! Website:generate_sitemap"
     document = Nokogiri::HTML(URI.open("#{url}/sitemap"))
     File.open("#{@file_root}/html/sitemap.html", "w") do |file|
-      file.write("<html>\n#{html_head}\n<h1>Sitemap</h1>\n<ul class='webpage-toc-contents'>\n")
+      file.write("<html>\n#{html_head(title: "Sitemap")}\n<h1>Sitemap</h1>\n<ul class='webpage-toc-contents'>\n")
       document.css("#main-content > table > tr > td > table a").map do |link|
         p "!!! generate_sitemap link #{link.inspect}"
         next if link.content.starts_with?("((")
@@ -186,7 +186,7 @@ class Website < ApplicationRecord
       end
       file.write("</ul>\n</html>\n")
       file.close
-      Browser.instance.html_to_pdf("sitemap")
+      Browser.instance.html_to_pdf("sitemap", landscape: false)
     end
   end
 
@@ -198,10 +198,10 @@ class Website < ApplicationRecord
 
   def generate_assets_toc(toc_name, assets)
     p "!!! generate_assets_toc #{toc_name.downcase} assets.count #{assets.count}"
-    toc_basename = "toc-#{toc_name.downcase}s"
+    toc_basename = "toc-#{toc_name.downcase.pluralize}"
     toc_filename = "#{@file_root}/html/#{toc_basename}.html"
     File.open(toc_filename, "w") do |file|
-      file.write("<html>\n#{html_head}\n<h1>Table of #{toc_name}s</h1>")
+      file.write("<html>\n#{html_head(title: toc_name.pluralize)}\n<h1>Table of #{toc_name.pluralize}</h1>")
       file.write("<table><thead><th>#{toc_name}</th><th>Referring page</th></thead>\n")
       assets.sort_by { it.name.downcase }.each do |asset|
         references = asset.asset_urls.map do |asset_url|
@@ -339,8 +339,12 @@ class Website < ApplicationRecord
     end
   end
 
-  def html_head
-    @_html_head ||= File.read(Rails.root.join("app", "views", "websites", "website_head.html"))
+  def html_head(title: nil)
+    ApplicationController.renderer.render(
+      template: "websites/website_head",
+      locals: { website: self, title: title ? "#{title} - " : "" },
+      layout: false
+    )
   end
 
   def get_squiz_pdf_list(options)
