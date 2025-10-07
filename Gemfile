@@ -40,7 +40,7 @@ gem "thruster", require: false
 # Use Active Storage variants [https://guides.rubyonrails.org/active_storage_overview.html#transforming-images]
 # gem "image_processing", "~> 1.2"
 
-gem "haml-rails", "~> 2.0"
+gem "haml-rails", "~> 3.0"
 gem "html2haml"
 gem "httparty"
 gem "addressable" # URI cannot cope with non-ASCII

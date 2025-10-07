@@ -42,7 +42,7 @@ class Webpage < ApplicationRecord
       return nil
     end
     p "!!! Webpage:spider_link uri #{uri.host}#{uri.path} from #{assetid}"
-    host_path = "#{uri.host}#{uri.path}"
+    host_path = AssetUrl.remap_host_path("#{uri.host}#{uri.path}")
     linked_asset = Asset.asset_for_host_path(host_path)
     p "!!! Webpage:asset #{linked_asset.inspect}"
     if linked_asset.present?
@@ -69,7 +69,7 @@ class Webpage < ApplicationRecord
   def create_or_update_webpage(asset)
     p "!!! Webpage:create_or_update_webpage asset parent #{self.assetid} #{asset.inspect}"
     page = Webpage.find_or_initialize_by(asset_id: asset.id) do |newpage|
-      p "========== new Webpage assetid #{assetid_formatted}"
+      p "========== new Webpage for assetid #{asset.assetid_formatted} from #{assetid_formatted}"
       newpage.website = website
       newpage.status = "unspidered"
       newpage.asset = asset
