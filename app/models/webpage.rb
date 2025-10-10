@@ -3,16 +3,12 @@ class Webpage < ApplicationRecord
   belongs_to :asset
   has_many :webpage_parents
 
-  HOME_SQUIZ_ASSETID = 93
-  PAGE_NOT_FOUND_SQUIZ_ASSETID = 13267
-
   def spider(follow_links: true)
     p "!!! Webpage:spider #{inspect}"
     raise "Webpage:spider missing asset #{inspect}" if asset.nil?
     p ">>>>>> Webpage:spider #{assetid}"
 
     start_at = Time.now
-    url = asset.url
 
     extract_info_from_document
 
@@ -95,8 +91,8 @@ class Webpage < ApplicationRecord
     extract_info(asset.document)
   end
 
-  def generate(head)
-    raise "Webpage:generate not spidered id #{id}" if status != "spidered"
+  def generate(head, pdf_filename: nil)
+    raise "Webpage:generate unspidered id #{id}" if status == "unspidered"
     filename = filename_with_assetid("html")
     File.open(filename, "wb") do |file|
       file.write("<html>\n#{head}\n")
@@ -110,7 +106,7 @@ class Webpage < ApplicationRecord
       file.write("</html>\n")
       file.close
       save!
-      Browser.instance.html_to_pdf(basename_with_assetid)
+      Browser.instance.html_to_pdf(basename_with_assetid, pdf_filename: pdf_filename)
       return
     end
     raise "Webpage:generate unable to create #{filename}"
@@ -128,13 +124,6 @@ class Webpage < ApplicationRecord
 
   def title
     asset.name.present? ? asset.name : asset.short_name
-  end
-
-  def XXpaths
-    p "!!! paths assetid #{assetid} parents #{parent_assetids.inspect}"
-    sleep(2)
-    return nil if home_page?
-    parents.select { !it.home_page? }.map { [it, it.paths] }
   end
 
   def assetid = asset.assetid
@@ -278,10 +267,10 @@ class Webpage < ApplicationRecord
   end
 
   def home_page?
-    assetid == HOME_SQUIZ_ASSETID
+    assetid == Asset::HOME_SQUIZ_ASSETID
   end
 
   def page_not_found_page?
-    assetid == PAGE_NOT_FOUND_SQUIZ_ASSETID
+    assetid == Asset::PAGE_NOT_FOUND_SQUIZ_ASSETID
   end
 end

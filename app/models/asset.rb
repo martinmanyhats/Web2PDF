@@ -5,6 +5,10 @@ class Asset < ApplicationRecord
   ASSETID_FORMAT = "%06d".freeze
   SAFE_NAME_REPLACEMENT = "_".freeze
 
+  HOME_SQUIZ_ASSETID = 93
+  PAGE_NOT_FOUND_SQUIZ_ASSETID = 13267
+  DVD_README_ASSETID = 19273
+
   def self.asset_for_uri(uri) = AssetUrl.find_by(url: "#{uri.host}#{uri.path}")&.asset
 
   def self.asset_for_host_path(host_path) = AssetUrl.find_sole_by(url: host_path).asset

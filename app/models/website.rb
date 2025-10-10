@@ -33,7 +33,6 @@ class Website < ApplicationRecord
     p "!!! spider_one asset #{asset.inspect}"
     webpage = Webpage.find_or_initialize_by(asset: asset) do |page|
       page.website = self
-      page.asset_path = "/#{asset.assetid_formatted}"
       page.status = "unspidered"
     end
     webpage.extract_info_from_document
@@ -43,6 +42,7 @@ class Website < ApplicationRecord
     end
     notify_current_webpage(webpage, "spidering")
     webpage.spider(follow_links: false)
+    webpage
   end
 
   def spider_all(options)
@@ -104,6 +104,7 @@ class Website < ApplicationRecord
     Browser.instance.generate(@file_root) do
       generate_readme
       generate_webpages(pages)
+      # generate_webpages_toc(webpages)
       generate_sitemap
       generate_assets("Image", @image_assets)
       generate_assets("PDF", @pdf_assets)
@@ -139,18 +140,14 @@ class Website < ApplicationRecord
   end
 
   def generate_readme
-    content = ApplicationController.renderer.render(
-      template: "websites/readme",
-      layout: "metapage",
-      assigns: { xxx: "xxx" }
-    )
-    Browser.instance.html_to_pdf("readme", content: content, output_dir: @file_root)
+    readme = Webpage.create(website: self, asset: Asset.find_sole_by(assetid: Asset::DVD_README_ASSETID), status: "internal")
+    readme.extract_info_from_document
+    readme.generate(html_head(title: readme.asset.short_name), pdf_filename: "#{file_root}/readme.pdf")
   end
 
   def generate_webpages(webpages)
     p "!!! Website:generate_webpages count #{webpages.count}"
     webpages.each { it.generate(html_head(title: it.asset.short_name)) }
-    # generate_webpages_toc(webpages)
   end
 
   def generate_webpages_toc(webpages)
@@ -160,7 +157,7 @@ class Website < ApplicationRecord
     File.open(toc_filename, "w") do |file|
       file.write("<html>\n#{html_head(title: "Contents")}\n<h1>Table of Contents</h1>")
       file.write("<ul class='webpage-toc-contents'>\n")
-      webpages.sort_by { it.asset_path }.each do |webpage|
+      webpages.sort_by { it.id }.each do |webpage|
         asset = webpage.asset
         indent = (12 * (webpage.asset_path.count("/") - 2)).clamp(0, Float::INFINITY)
         p "!!! indent asset.assetid #{asset.assetid} #{indent} count #{webpage.asset_path.count("/")}"
