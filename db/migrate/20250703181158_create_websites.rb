@@ -6,6 +6,7 @@ class CreateWebsites < ActiveRecord::Migration[8.0]
       t.references :root_webpage, null: true, foreign_key: { to_table: :webpages}
       t.boolean :auto_refresh, default: false
       t.integer :refresh_period, default: 60 * 60 * 24
+      t.string :output_root
       t.string :publish_url
       t.string :status, null: false, default: "unscraped"
       t.string :remove_scripts, default: ""

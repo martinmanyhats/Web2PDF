@@ -11,9 +11,9 @@ class Asset < ApplicationRecord
 
   def self.asset_for_uri(uri) = AssetUrl.find_by(url: "#{uri.host}#{uri.path}")&.asset
 
-  def self.asset_for_host_path(host_path) = AssetUrl.find_sole_by(url: host_path).asset
+  def self.XXasset_for_host_path(host_path) = AssetUrl.find_by(url: host_path).asset
 
-  def self.asset_url_for_uri(uri) = AssetUrl.find_sole_by(url: "#{uri.host}#{uri.path}")
+  def self.XXasset_url_for_uri(uri) = AssetUrl.find_sole_by(url: "#{uri.host}#{uri.path}")
 
   def self.get_published_assets(website)
     p "!!! get_published_assets"
@@ -110,8 +110,6 @@ class Asset < ApplicationRecord
       end
   end
 
-  def assetid_formatted = ASSETID_FORMAT % assetid
-
   def safe_name
     sname = name.present? ? name : short_name
     raise "Asset:safe_name missing name or short_name assetid #{asset.assetid}" if sname.blank?
@@ -137,6 +135,23 @@ class Asset < ApplicationRecord
     asset_urls.map(&:webpage)
   end
 
+  def title
+    name.present? ? name : short_name
+  end
+
+  def filename_with_assetid(suffix, output_dir = nil)
+    output_dir = suffix if output_dir.nil?
+    "#{website.output_root}/#{output_dir}/#{filename_base}.#{suffix}"
+  end
+
+  def XXbasename_with_assetid
+    raise "Asset:basename_with_assetid missing webpage for assetid #{assetid}" if webpage.nil?
+    base = webpage.squiz_canonical_url.gsub(/.*\//, "")
+    "#{assetid_formatted}-#{base}"
+  end
+
+  def assetid_formatted = ASSETID_FORMAT % assetid
+
   def filename_from_data_url
     raise "Asset:filename_from_data_url missing url" if asset_urls.empty?
     matches = url.match(%r{__data/assets/\w+/\d+/\d+/(.*)$})
@@ -157,6 +172,8 @@ class Asset < ApplicationRecord
   def office? = ["MS Excel Document", "MS Word Document"].include? asset_type
 
   def attachment? = ["File", "MS Excel Document", "MS Word Document", "MP3 File", "Video File"].include? asset_type
+
+  def squiz_canonical_url = asset_urls.first.webpage.squiz_canonical_url
 
   # include/general.inc
   # function get_asset_hash($assetid)

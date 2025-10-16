@@ -1,6 +1,6 @@
 class AssetUrl < ApplicationRecord
   belongs_to :asset
-  belongs_to :webpage, optional: true
+  has_and_belongs_to_many :webpages
 
   def self.remap_host_path(host_path)
     @remaps = YAML::load(File.open("#{Rails.root.to_s}/config/asset_url_remaps.yml")) unless @remaps
@@ -12,5 +12,11 @@ class AssetUrl < ApplicationRecord
     else
       host_path
     end
+  end
+
+  def self.remap_and_find_by_host_path(host_path)
+    asset_url = AssetUrl.find_by(url: AssetUrl.remap_host_path(host_path))
+    raise "AssetUrl:remap_and_find_by_host_path host_path not found #{host_path}" if asset_url.nil?
+    asset_url
   end
 end

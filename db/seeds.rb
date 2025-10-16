@@ -10,6 +10,7 @@
 
 website = Website.create(name: "Deddington History",
                          url: "https://www.deddingtonhistory.uk",
+                         output_root: "/tmp/dh",
                          status: "unscraped",
                          remove_scripts: "cookieControl",
                          css: ""

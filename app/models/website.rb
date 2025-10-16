@@ -9,7 +9,6 @@ class Website < ApplicationRecord
   after_update_commit -> { broadcast_refresh_later }
 
   attr_reader :web_root
-  attr_reader :file_root
   attr_reader :pdf_assets
   attr_reader :image_assets
   attr_reader :office_assets
@@ -49,7 +48,6 @@ class Website < ApplicationRecord
     root_asset = Asset.find_sole_by(assetid: 93)
     self.root_webpage = Webpage.find_or_initialize_by(asset: root_asset) do |page|
       page.website = self
-      page.webpage_parents = []
       page.status = "unspidered"
       page.squiz_canonical_url = "#{url}"
     end
@@ -79,16 +77,15 @@ class Website < ApplicationRecord
 
   def generate_archive(options)
     p "!!! Website:generate_archive options #{options.inspect}"
-    @file_root = "/tmp/dh"
-    FileUtils.remove_entry_secure(@file_root) if File.exist?(@file_root)
-    %w[html page pdf image assets].each { |subdir| FileUtils.mkdir_p("#{@file_root}/#{subdir}") }
+    FileUtils.remove_entry_secure(output_root) if File.exist?(output_root)
+    %w[html page pdf image assets].each { |subdir| FileUtils.mkdir_p("#{output_root}/#{subdir}") }
     @pdf_assets = Set.new
     @image_assets = Set.new
     @office_assets = Set.new
     if options[:webroot].present?
       @web_root = options[:webroot]
     else
-      @web_root = "file://#{@file_root}"
+      @web_root = "file://#{output_root}"
     end
     if options[:assetid].present?
       asset = Asset.find_by(assetid: options[:assetid].to_i)
@@ -101,7 +98,7 @@ class Website < ApplicationRecord
       pages = webpages.where(status: "spidered")
     end
     p "!!! Website:generate_archive pages #{pages.inspect}"
-    Browser.instance.generate(@file_root) do
+    Browser.instance.generate(output_root) do
       generate_readme
       generate_webpages(pages)
       # generate_webpages_toc(webpages)
@@ -142,18 +139,20 @@ class Website < ApplicationRecord
   def generate_readme
     readme = Webpage.create(website: self, asset: Asset.find_sole_by(assetid: Asset::DVD_README_ASSETID), status: "internal")
     readme.extract_info_from_document
-    readme.generate(html_head(title: readme.asset.short_name), pdf_filename: "#{file_root}/readme.pdf")
+    html_filename = "#{output_root}/html/readme.html"
+    pdf_filename = "#{output_root}/readme.pdf"
+    readme.generate(head: html_head(title: readme.asset.short_name), html_filename: html_filename, pdf_filename: pdf_filename)
   end
 
   def generate_webpages(webpages)
     p "!!! Website:generate_webpages count #{webpages.count}"
-    webpages.each { it.generate(html_head(title: it.asset.short_name)) }
+    webpages.each { it.generate(head: html_head(title: it.asset.short_name)) }
   end
 
   def generate_webpages_toc(webpages)
     p "!!! Website:generate_webpages_toc count #{webpages.count}"
     toc_basename = "toc-contents"
-    toc_filename = "#{@file_root}/html/#{toc_basename}.html"
+    toc_filename = "#{output_root}/html/#{toc_basename}.html"
     File.open(toc_filename, "w") do |file|
       file.write("<html>\n#{html_head(title: "Contents")}\n<h1>Table of Contents</h1>")
       file.write("<ul class='webpage-toc-contents'>\n")
@@ -165,14 +164,14 @@ class Website < ApplicationRecord
       end
       file.write("</ul>\n</html>\n")
       file.close
-      Browser.instance.html_to_pdf(toc_basename)
+      Browser.instance.html_to_pdf(basename: toc_basename)
     end
   end
 
   def generate_sitemap
     p "!!! Website:generate_sitemap"
     document = Nokogiri::HTML(URI.open("#{url}/sitemap"))
-    File.open("#{@file_root}/html/sitemap.html", "w") do |file|
+    File.open("#{output_root}/html/sitemap.html", "w") do |file|
       file.write("<html>\n#{html_head(title: "Sitemap")}\n<h1>Sitemap</h1>\n<ul class='webpage-toc-contents'>\n")
       document.css("#main-content > table > tr > td > table a").map do |link|
         p "!!! generate_sitemap link #{link.inspect}"
@@ -183,36 +182,36 @@ class Website < ApplicationRecord
       end
       file.write("</ul>\n</html>\n")
       file.close
-      Browser.instance.html_to_pdf("sitemap", landscape: false)
+      Browser.instance.html_to_pdf(basename: "sitemap", landscape: false)
     end
   end
 
   def generate_assets(toc_name, assets)
     p "!!! generate_assets #{toc_name} assets.count #{assets.count}"
-    assets.each { it.generate(@file_root, toc_name)}
+    assets.each { it.generate(output_root, toc_name)}
     generate_assets_toc(toc_name, assets)
   end
 
   def generate_assets_toc(toc_name, assets)
     p "!!! generate_assets_toc #{toc_name.downcase} assets.count #{assets.count}"
+    p "!!! generate_assets_toc #{toc_name.downcase} assets #{assets.inspect}"
     toc_basename = "toc-#{toc_name.downcase.pluralize}"
-    toc_filename = "#{@file_root}/html/#{toc_basename}.html"
+    toc_filename = "#{output_root}/html/#{toc_basename}.html"
     File.open(toc_filename, "w") do |file|
       file.write("<html>\n#{html_head(title: toc_name.pluralize)}\n<h1>Table of #{toc_name.pluralize}</h1>")
-      file.write("<table><thead><th>#{toc_name}</th><th>Referring page</th></thead>\n")
+      file.write("<table><thead><th>#{toc_name}</th><th>Referring pages</th></thead>\n")
       assets.sort_by { it.name.downcase }.each do |asset|
         references = asset.asset_urls.map do |asset_url|
-          webpage = asset_url.webpage
-          "<a href='#{web_root}/#{webpage.filename_with_assetid("pdf")}'>#{webpage.title}</a>"
+          asset_url.webpages.map { "<a href='#{web_root}/#{it.asset.filename_with_assetid(toc_name)}'>#{it.title}</a>" }.join(", ")
         end.join("<br />")
         file.write("<tr>")
-        file.write("<td><a href='#{@file_root}/#{toc_name.downcase}/#{asset.assetid_formatted}-#{asset.name}'>#{asset.name}</a></td>\n")
+        file.write("<td><a href='#{output_root}/#{toc_name.downcase}/#{asset.assetid_formatted}-#{asset.name}'>#{asset.name}</a></td>\n")
         file.write("<td>#{references}</td\n")
         file.write("</tr>")
       end
       file.write("</table>\n</html>\n")
       file.close
-      Browser.instance.html_to_pdf(toc_basename)
+      Browser.instance.html_to_pdf(basename: toc_basename)
     end
   end
 

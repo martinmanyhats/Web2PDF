@@ -44,11 +44,8 @@ gem "haml-rails", "~> 3.0"
 gem "html2haml"
 gem "httparty"
 gem "addressable" # URI cannot cope with non-ASCII
-gem "nokogiri"
-gem "ferrum_pdf"
-#gem "grover"
-#gem "wicked_pdf"
-#gem "wkhtmltopdf-binary"
+gem "nokogiri", "~> 1.18"
+gem "ferrum_pdf", "~> 3.0"
 gem 'libreconv'
 
 group :development, :test do
