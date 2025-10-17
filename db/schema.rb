@@ -31,6 +31,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_30_142319) do
   end
 
   create_table "assets", force: :cascade do |t|
+    t.string "type", null: false
     t.integer "website_id", null: false
     t.integer "assetid", null: false
     t.string "asset_type", null: false

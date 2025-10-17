@@ -21,45 +21,29 @@ class Asset < ApplicationRecord
     stream_lines_for_url("#{website.url}/reports/publishedassets").each do |line|
       if line =~ /tr class="squiz_asset"/
         values = line.match(assets_regex)
-        # p "!!! values #{values.inspect}"
-        # p "!!! assetid #{values[1]}"
-        Rails.logger.silence do
-          asset = Asset.find_or_create_by!(website: website, assetid: values[1]) do |asset|
-            asset.asset_type = values[2]
+        p "!!! values #{values.inspect}"
+        assetid = values[1].to_i
+        asset_type = values[2]
+        asset_class = asset_class_from_asset_type(asset_type)
+        # Rails.logger.silence do
+          asset = asset_class.find_or_create_by!(website: website, assetid: assetid) do |asset|
+            asset.asset_type = asset_type
             asset.name = values[3]
             asset.short_name = values[4]
           end
-          url_info = JSON.parse(values[5])
-          asset_urls = url_info[0].uniq
-          if asset_urls.empty?
-            case asset.asset_type
-            when "MS Word Document"
-              url = "#{url}/__data/assets/word_doc/#{asset.squiz_hash}{/#{asset.assetid}/#{asset.name}"
-            when "MS Excel Document"
-              url = "#{url}/__data/assets/excel_doc/#{asset.squiz_hash}/#{asset.assetid}/#{asset.name}"
-            else
-              raise "Website:get_published_assets missing url #{asset.inspect}"
-            end
-          else
-            asset_urls.map do |url|
-              # raise "Asset:get_published_assets duplicate url #{url} assetid #{asset.assetid}" if AssetUrl.where(url: url).exists?
-              # Only accumulate URLs for this website.
-              # Also suppress bizarro URLs which are likely faulty.
-              if url.starts_with?(website.hostname) && !url.include?("/reports/") && !AssetUrl.where(url: url).exists?
-                asset.asset_urls << AssetUrl.create(url: url)
-              end
-            end
-          end
-          if url_info[1].present?
-            asset.redirect_url = url_info[1]
+          redirect_url = asset.create_asset_urls_from_value(values[5])
+          if redirect_url.present?
+            raise "Asset:get_published_assets redirect URL but not RedirectAsset" unless asset_class == RedirectAsset
+            asset.redirect_url = redirect_url
             p "!!! asset.redirect_url #{asset.redirect_url}"
-            raise "Asset:get_published_assets missing scheme for redirection #{asset.redirect_url}" unless URI.parse(asset.redirect_url).scheme
-            raise "Asset:get_published_assets missing host for redirection #{asset.redirect_url}" unless URI.parse(asset.redirect_url).host
-            raise "Asset:get_published_assets missing path for redirection #{asset.redirect_url}" unless URI.parse(asset.redirect_url).path
-          end
+            redirect_uri = URI.parse(redirect_url)
+            raise "Asset:get_published_assets missing scheme for redirection #{asset.redirect_url}" unless redirect_uri.scheme
+            raise "Asset:get_published_assets missing host for redirection #{asset.redirect_url}" unless redirect_uri.host
+            raise "Asset:get_published_assets missing path for redirection #{asset.redirect_url}" unless redirect_uri.path
+            # end
           p "!!! get_published_assets asset #{asset.inspect} urls #{asset.asset_urls.inspect}"
-          asset.save!
         end
+        asset.save!
       end
     end
   end
@@ -84,6 +68,68 @@ class Asset < ApplicationRecord
         end
       end
     end
+  end
+
+  def self.asset_class_from_asset_type(asset_type)
+    case asset_type
+    when "Standard Page"
+      asset_class = WebpageAsset
+    when "Asset Listing Page"
+      asset_class = WebpageAsset
+    when "DOL Google Sheet viewer"
+      asset_class = DatafileAsset
+    when "DOL LargeImage"
+      asset_class = DatafileAsset
+    when "File"
+      asset_class = DatafileAsset
+    when "Image"
+      asset_class = DatafileAsset
+    when "MS Excel Document"
+      asset_class = DatafileAsset
+    when "MS Word Document"
+      asset_class = DatafileAsset
+    when "PDF File"
+      asset_class = DatafileAsset
+    when "Redirect Page"
+      asset_class = RedirectAsset
+    when "Standard Page"
+      asset_class = WebpageAsset
+    when "Thumbnail"
+      asset_class = DatafileAsset
+    when "Video File"
+      asset_class = DatafileAsset
+    else
+      raise "Website:get_published_assets unknown asset type #{asset_type}"
+    end
+    asset_class
+  end
+
+  def create_asset_urls_from_value(value)
+    url_info = JSON.parse(value)
+    urls = url_info[0].uniq
+    if urls.empty?
+      # Some MS assets have no webpath.
+      case asset_type
+      when "MS Word Document"
+        url = "#{website.url}/__data/assets/word_doc/#{squiz_hash}/#{assetid}/#{name}"
+      when "MS Excel Document"
+        url = "#{website.url}/__data/assets/excel_doc/#{squiz_hash}/#{assetid}/#{name}"
+      end
+      urls = [url]
+    end
+    raise "Asset:create_asset_urls_from_value no URLs assetid #{assetid}" if urls.empty?
+    p "++++ urls #{urls.inspect}"
+    urls.uniq.map do |url|
+      p "++++ url #{url}"
+      raise "Asset:create_asset_urls_from_value duplicate url #{url} assetid #{assetid}" if AssetUrl.where(url: url).exists?
+      # Only accumulate URLs for this website.
+      if website.internal?(url) && !url.include?("/reports/")
+        p "++++ add asset url #{url}"
+        asset_urls << AssetUrl.create(url: url)
+      end
+    end
+    # Return any redirection URL.
+    url_info[1]
   end
 
   def generate(file_root, toc_name)

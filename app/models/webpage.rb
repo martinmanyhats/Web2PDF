@@ -13,7 +13,7 @@ class Webpage < ApplicationRecord
     extract_info_from_document
 
     if follow_links
-      spiderable_link_elements(Nokogiri::HTML(content)).map { clean_link(it) }.each { spider_link(it) }
+      spiderable_link_elements(Nokogiri::HTML(content)).each { spider_link(it) }
     end
 
     self.spider_duration = (Time.now - start_at).seconds
@@ -32,24 +32,26 @@ class Webpage < ApplicationRecord
     if uri.host != website.host ||
        uri.path.blank? ||
        !(uri.scheme == "http" || uri.scheme == "https") ||
-       uri.path.match?(%r{/(mainmenu|reports|sitemap|testing)}) ||
-       uri.path.match?(/\.(jpg|jpeg|png|gif|pdf|doc|docx|xls|xlsx|xml|mp3|js|css|rtf|txt)$/i)
+       uri.path.match?(%r{/(mainmenu|reports|sitemap|testing)}) # ||
+      # uri.path.match?(/\.(jpg|jpeg|png|gif|pdf|doc|docx|xls|xlsx|xml|mp3|js|css|rtf|txt)$/i)
       p "!!! Webpage:spider_link skipping #{link}"
       return nil
     end
-    p "!!! Webpage:spider_link uri #{uri.host}#{uri.path} from #{assetid}"
+    p "!!! Webpage:spider_link uri #{uri} from #{assetid}"
     host_path = "#{uri.host}#{uri.path}"
     asset_url = AssetUrl.remap_and_find_by_host_path(host_path)
     linked_asset = asset_url.asset
     p "!!! Webpage:asset #{linked_asset.inspect}"
     if linked_asset.present?
       if linked_asset.content_page?
+        raise "Webpage:spider_link content page is not text/html" if content_type != "text/html"
         new_webpage = create_or_update_webpage(linked_asset)
         link_asset_url(asset_url, new_webpage)
         p "!!! asset_url #{asset_url.inspect} .webpages #{asset_url.webpages.inspect}"
       elsif linked_asset.redirect_page?
         p "!!! asset.redirect_url #{linked_asset.redirect_url}"
         raise "Webpage:spider_link missing redirect_url linked_asset #{linked_asset.inspect}" unless linked_asset.redirect_url
+        (uri, content_type) = resolve_uri(XXX)
         if website.internal?(linked_asset.redirect_url)
           p "!!! spider_link recursing"
           spider_link(linked_asset.redirect_url, depth + 1)
@@ -210,6 +212,7 @@ class Webpage < ApplicationRecord
     parsed_content.css("a[href]")
                   .select { |a| !a["href"].start_with?("#") }
                   .compact
+                  .map { clean_link(it) }
   end
 
   def spiderable_images(parsed_content)

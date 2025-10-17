@@ -110,7 +110,10 @@ class Website < ApplicationRecord
   end
 
   def internal?(url_or_uri)
-    uri = url_or_uri.kind_of?(String) ? URI.parse(url_or_uri) : url_or_uri
+    if url_or_uri.kind_of?(String)
+      url_or_uri = "https://#{url_or_uri}" unless url_or_uri =~ /^https?:\/\//
+      uri = URI.parse(url_or_uri)
+    end
     uri.host == host
   end
 
@@ -275,6 +278,44 @@ class Website < ApplicationRecord
     uri.query = nil
     # p "!!! canonicalise result #{uri.inspect}"
     uri
+  end
+
+  def resolve_uri(uri)
+    p "!!! Website:resolve_uri uri #{uri}"
+    if uri.host != host ||
+       uri.path.blank? ||
+       !(uri.scheme == "http" || uri.scheme == "https") ||
+       uri.path.match?(%r{/(mainmenu|reports|sitemap|testing)})
+      return [nil, nil]
+    end
+    (resolved_uri, content_type) = fetch_head_for_uri(uri)
+    p "!!! resolve_uri resolved_uri #{resolved_uri}"
+    p "!!! resolve_uri content_type#{content_type}"
+    [internal?(resolved_uri) ? resolved_uri : nil, content_type]
+  end
+
+  def fetch_head_for_uri(uri, limit = 5)
+    p "!!! fetch_head_for_uri uri #{uri}"
+    raise "Website:fetch_head_for_uri redirected too many times" if limit == 0
+    response = nil
+    Net::HTTP.start(uri.host, uri.port) do
+      it.open_timeout = 10
+      it.read_timeout = 10
+      p "!!! request_head uri #{uri.to_s}"
+      response = it.request_head(uri.to_s)
+    end
+    p "!!! fetch_head_for_uri response #{response}"
+    case response
+    when Net::HTTPSuccess then
+      p "**** SUCCESS"
+      return [uri, response.content_type]
+    when Net::HTTPRedirection then
+      p "**** REDIRECTION to #{response['location']}"
+      return fetch_head_for_uri(URI.parse(response['location']), limit - 1)
+    when nil
+      raise "Website:fetch_head_for_uri nil"
+    end
+    raise "Website:fetch_head_for_uri unexpected HTTP code #{response.code}"
   end
 
   # private
