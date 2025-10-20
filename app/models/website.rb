@@ -2,8 +2,8 @@ require 'open-uri'
 
 class Website < ApplicationRecord
   has_many :assets, dependent: :destroy
-  has_many :webpages, dependent: :destroy
-  has_one :root_webpage, class_name: "Webpage", dependent: nil
+  # has_many :webpages, dependent: :destroy
+  # has_one :root_webpage, class_name: "Webpage", dependent: nil
 
   broadcasts_refreshes
   after_update_commit -> { broadcast_refresh_later }
@@ -13,11 +13,12 @@ class Website < ApplicationRecord
   attr_reader :image_assets
   attr_reader :office_assets
 
-  DataAsset = Struct.new(:assetid, :short_name, :filename, :url, :digest)
+  FileAsset = Struct.new(:assetid, :short_name, :filename, :url, :digest)
 
   def spider(options = {})
     p "!!! Website::spider options #{options.inspect} #{inspect}"
     Asset.get_published_assets(self) unless options[:skipassets].present?
+    notify_page_list
     if options[:assetid]
       spider_one(options[:assetid].to_i)
     else
@@ -27,6 +28,7 @@ class Website < ApplicationRecord
   end
 
   def spider_one(assetid)
+    raise "spider_one NOT IMPLEMENTED"
     p "!!! spider_one assetid #{assetid}"
     asset = Asset.find_by(assetid: assetid)
     p "!!! spider_one asset #{asset.inspect}"
@@ -44,23 +46,24 @@ class Website < ApplicationRecord
     webpage
   end
 
-  def spider_all(options)
-    root_asset = Asset.find_sole_by(assetid: 93)
-    self.root_webpage = Webpage.find_or_initialize_by(asset: root_asset) do |page|
-      page.website = self
-      page.status = "unspidered"
-      page.squiz_canonical_url = "#{url}"
-    end
-    root_webpage.extract_info_from_document
-    p "!!! root_webpage saving #{root_webpage.inspect}"
-    Rails.logger.silence do
-      root_webpage.save!
-    end
+  def spider_all(options = {})
+    p "!!! spider_all options #{options.inspect} #{inspect}"
+    home_asset = Asset.home
+    home_asset.status = "unspidered"
+    home_asset.save!
 
-    spider_unspidered_webpages
-
-    # Add in sitemap after content pages have been spidered. Should be redundant as pages should already have been found.
-    spider_sitemap
+    spider = Spider.new(self)
+    loop do
+      unspidered_assets = Asset.where(status: "unspidered").order(:id)
+      p "!!! Website::spider unspidered_webpages.count #{unspidered_assets.count}"
+      break if unspidered_assets.empty?
+      unspidered_assets.each do |asset|
+        notify_current_asset(asset, "spidering")
+        spider.spider_asset(asset)
+      end
+    end
+    notify_current_asset(nil, "spider complete")
+    Report::generate_report
   end
 
   def spider_unspidered_webpages
@@ -73,6 +76,11 @@ class Website < ApplicationRecord
         webpage.spider(follow_links: true)
       end
     end
+  end
+
+  def resolve_redirects
+    p "!!! resolve_redirects count #{RedirectAsset.count}"
+    RedirectAsset.all.each(&:resolve_redirection)
   end
 
   def generate_archive(options)
@@ -112,9 +120,9 @@ class Website < ApplicationRecord
   def internal?(url_or_uri)
     if url_or_uri.kind_of?(String)
       url_or_uri = "https://#{url_or_uri}" unless url_or_uri =~ /^https?:\/\//
-      uri = URI.parse(url_or_uri)
+      url_or_uri = URI.parse(url_or_uri)
     end
-    uri.host == host
+    url_or_uri.host == host
   end
 
   def host
@@ -249,8 +257,8 @@ class Website < ApplicationRecord
     File.open(log_filename, "a") { |file| file.puts(message) }
   end
 
-  def canonicalise(url_or_uri)
-    # p "!!! canonicalise #{url_or_uri.inspect}"
+  def normalize(url_or_uri)
+    # p "!!! normalize #{url_or_uri.inspect}"
     uri = if url_or_uri.kind_of?(String)
             url_or_uri = url_or_uri.strip
             url_or_uri = "https://#{url_or_uri}" unless url_or_uri =~ /^https?:\/\//
@@ -259,7 +267,9 @@ class Website < ApplicationRecord
             url_or_uri
           end
     return uri if uri.scheme == "mailto"
-    website_host = Addressable::URI.parse(url).host
+    if uri.scheme.blank?
+      uri.scheme = "https"
+    end
     if uri.host.blank?
       uri.host = website_host
     end
@@ -271,16 +281,17 @@ class Website < ApplicationRecord
         uri.path = uri.path.chop
       end
     end
-    if uri.scheme.blank?
-      uri.scheme = "https"
-    end
     uri.fragment = nil
     uri.query = nil
-    # p "!!! canonicalise result #{uri.inspect}"
+    # p "!!! normalize result #{uri.inspect}"
     uri
   end
 
-  def resolve_uri(uri)
+  def website_host
+    @website_host ||= Addressable::URI.parse(url).host
+  end
+
+  def XXresolve_uri(uri)
     p "!!! Website:resolve_uri uri #{uri}"
     if uri.host != host ||
        uri.path.blank? ||
@@ -360,7 +371,7 @@ class Website < ApplicationRecord
   end
 
   def canonical_url_for_url(url)
-    uri = canonicalise(url)
+    uri = normalize(url)
     return url if uri.host != host
     p "!!! canonical_url_for_url #{url} uri #{uri}"
     # Some redirected links are direct to a PDF.
@@ -405,7 +416,7 @@ class Website < ApplicationRecord
         log(:pdf_duplicates, "FILENAME assetids #{existing.assetid}:#{assetid}   short names #{existing.short_name}:#{short_name}   filename #{filename}  #{digest != existing.digest ? "  CONTENTS DIFFER" : ""}")
         data_asset = existing
       else
-        data_asset = DataAsset.new(assetid: assetid.to_i, short_name: short_name, filename: filename, url: url, digest: digest)
+        data_asset = FileAsset.new(assetid: assetid.to_i, short_name: short_name, filename: filename, url: url, digest: digest)
         pdfs_by_assetid[filename] = data_asset
       end
       if options.has_key?(:digest)
@@ -424,6 +435,15 @@ class Website < ApplicationRecord
       raise "Website:get_squiz_pdf_list unknown filename #{filename}" unless @pdfs_by_filename.has_key?(File.basename(uri.to_s))
     end
     pdfs_by_assetid
+  end
+
+  def notify_current_asset(asset, notice = "NONE")
+    Turbo::StreamsChannel.broadcast_replace_to(
+      "web2pdf",
+      target: "website_#{self.id}_current_asset_info",
+      partial: "websites/current_asset_info",
+      locals: { website: self, asset: asset, notice: notice }
+    )
   end
 
   def notify_current_webpage(webpage, notice = "NONE")

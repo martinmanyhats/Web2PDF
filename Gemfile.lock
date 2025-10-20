@@ -103,6 +103,8 @@ GEM
     erubis (2.7.0)
     et-orbi (1.2.11)
       tzinfo
+    fast_excel (0.5.0)
+      ffi (> 1.9, < 2)
     ferrum (0.17.1)
       addressable (~> 2.5)
       base64 (~> 0.2)
@@ -112,6 +114,14 @@ GEM
     ferrum_pdf (3.0.1)
       actionpack (>= 6.0.0)
       ferrum (~> 0.15)
+    ffi (1.17.2-aarch64-linux-gnu)
+    ffi (1.17.2-aarch64-linux-musl)
+    ffi (1.17.2-arm-linux-gnu)
+    ffi (1.17.2-arm-linux-musl)
+    ffi (1.17.2-arm64-darwin)
+    ffi (1.17.2-x86_64-darwin)
+    ffi (1.17.2-x86_64-linux-gnu)
+    ffi (1.17.2-x86_64-linux-musl)
     fugit (1.11.1)
       et-orbi (~> 1, >= 1.2.11)
       raabro (~> 1.4)
@@ -395,6 +405,7 @@ DEPENDENCIES
   bootsnap
   brakeman
   debug
+  fast_excel
   ferrum_pdf (~> 3.0)
   haml-rails (~> 3.0)
   html2haml

@@ -28,7 +28,7 @@ class Webpage < ApplicationRecord
     p "!!! Webpage:spider_link link #{link} depth #{depth}"
     raise "Webpage:spider_link depth exceeded #{link}" if depth > 3
     raise "Webpage:spider_link link not interpolated #{link} in assetid #{assetid} #{squiz_canonical_url}" if link.include?("./?a=")
-    uri = website.canonicalise(link)
+    uri = website.normalize(link)
     if uri.host != website.host ||
        uri.path.blank? ||
        !(uri.scheme == "http" || uri.scheme == "https") ||
@@ -43,12 +43,12 @@ class Webpage < ApplicationRecord
     linked_asset = asset_url.asset
     p "!!! Webpage:asset #{linked_asset.inspect}"
     if linked_asset.present?
-      if linked_asset.content_page?
+      if linked_asset.content?
         raise "Webpage:spider_link content page is not text/html" if content_type != "text/html"
         new_webpage = create_or_update_webpage(linked_asset)
         link_asset_url(asset_url, new_webpage)
         p "!!! asset_url #{asset_url.inspect} .webpages #{asset_url.webpages.inspect}"
-      elsif linked_asset.redirect_page?
+      elsif linked_asset.redirect?
         p "!!! asset.redirect_url #{linked_asset.redirect_url}"
         raise "Webpage:spider_link missing redirect_url linked_asset #{linked_asset.inspect}" unless linked_asset.redirect_url
         (uri, content_type) = resolve_uri(XXX)
@@ -127,7 +127,7 @@ class Webpage < ApplicationRecord
   private
 
   def extract_info(doc)
-    p "!!! extract_info assetid #{assetid}"
+    p "!!! extract_standard_page_info assetid #{assetid}"
     self.squiz_canonical_url = doc.css("link[rel=canonical]").first["href"]
     timestamp = doc.css("meta[name='squiz-updated_iso8601']").first&.attribute("content")&.value
     self.squiz_updated = DateTime.iso8601(timestamp) unless timestamp.blank?
@@ -143,7 +143,7 @@ class Webpage < ApplicationRecord
   def generate_html_link(url)
     p "!!! generate_html_link url #{url.inspect}"
     return "" if url.blank? # Faulty links in content.
-    uri = website.canonicalise(url)
+    uri = website.normalize(url)
     asset = Asset.asset_for_uri(uri)
     p "!!! generate_html_link uri #{uri} asset #{asset.inspect}"
     return url if asset.nil?
@@ -151,9 +151,9 @@ class Webpage < ApplicationRecord
       p "!!! generate_html_link redirect #{asset.redirect_url}"
       # Spidering has already recursively resolved redirects, but it may be external.
       # TODO spider resolution needs to result in host path
-      p "!!! website.canonicalise(asset.redirect_url).host #{website.canonicalise(asset.redirect_url).host}"
+      p "!!! website.normalize(asset.redirect_url).host #{website.normalize(asset.redirect_url).host}"
       # Do nothing if external URL.
-      return asset.redirect_url if website.canonicalise(asset.redirect_url).host != website.host
+      return asset.redirect_url if website.normalize(asset.redirect_url).host != website.host
       return generate_html_link(asset.redirect_url)
     elsif asset.content_page?
       dest_page = Webpage.find_by(asset_id: asset.id)
@@ -231,18 +231,6 @@ class Webpage < ApplicationRecord
   def clean_link(element)
     # TODO remove anchor?
     element.attribute("href").to_s.strip
-  end
-
-  def resolve_redirection(url)
-    p "!!! resolve_redirection? #{url}"
-    depth = 0
-    loop do
-      asset = Asset.asset_for_redirection(URI.parse(url))
-      url = asset.asset_urls.first
-      return url if asset.asset_type != "Redirect Page"
-      depth += 1
-      raise "Webpage:resolve_redirection redirect depth exceeded" if depth > 5
-    end
   end
 
   def document

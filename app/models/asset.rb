@@ -6,130 +6,38 @@ class Asset < ApplicationRecord
   SAFE_NAME_REPLACEMENT = "_".freeze
 
   HOME_SQUIZ_ASSETID = 93
+  SITEMAP_ASSETID = 15632
   PAGE_NOT_FOUND_SQUIZ_ASSETID = 13267
   DVD_README_ASSETID = 19273
 
-  def self.asset_for_uri(uri) = AssetUrl.find_by(url: "#{uri.host}#{uri.path}")&.asset
+  def self.asset_for_uri(uri) = AssetUrl.find_sole_by(url: "#{uri.host}#{uri.path}").asset
 
   def self.XXasset_for_host_path(host_path) = AssetUrl.find_by(url: host_path).asset
 
   def self.XXasset_url_for_uri(uri) = AssetUrl.find_sole_by(url: "#{uri.host}#{uri.path}")
 
   def self.get_published_assets(website)
-    p "!!! get_published_assets"
+    # p "!!! get_published_assets"
     assets_regex = Regexp.new("tr class=\"squiz_asset\">#{"<td>([^<]*)</td>" * 5}")
     stream_lines_for_url("#{website.url}/reports/publishedassets").each do |line|
       if line =~ /tr class="squiz_asset"/
         values = line.match(assets_regex)
-        p "!!! values #{values.inspect}"
+        # p "!!! values #{values.inspect}"
         assetid = values[1].to_i
         asset_type = values[2]
         asset_class = asset_class_from_asset_type(asset_type)
-        # Rails.logger.silence do
+        Rails.logger.silence do
           asset = asset_class.find_or_create_by!(website: website, assetid: assetid) do |asset|
             asset.asset_type = asset_type
             asset.name = values[3]
             asset.short_name = values[4]
           end
-          redirect_url = asset.create_asset_urls_from_value(values[5])
-          if redirect_url.present?
-            raise "Asset:get_published_assets redirect URL but not RedirectAsset" unless asset_class == RedirectAsset
-            asset.redirect_url = redirect_url
-            p "!!! asset.redirect_url #{asset.redirect_url}"
-            redirect_uri = URI.parse(redirect_url)
-            raise "Asset:get_published_assets missing scheme for redirection #{asset.redirect_url}" unless redirect_uri.scheme
-            raise "Asset:get_published_assets missing host for redirection #{asset.redirect_url}" unless redirect_uri.host
-            raise "Asset:get_published_assets missing path for redirection #{asset.redirect_url}" unless redirect_uri.path
-            # end
-          p "!!! get_published_assets asset #{asset.inspect} urls #{asset.asset_urls.inspect}"
-        end
-        asset.save!
-      end
-    end
-  end
-
-  def self.stream_lines_for_url(url)
-    p "!!! stream_lines_for_url #{url}"
-    uri = URI(url)
-    Enumerator.new do |yielder|
-      Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
-        request = Net::HTTP::Get.new(uri)
-        http.request(request) do |response|
-          buffer = ""
-          response.read_body do |chunk|
-            buffer << chunk
-            while (line = buffer.slice!(/.*?\n/)) # yield full lines
-              line = line.chomp.force_encoding(Encoding::ISO_8859_1).encode(Encoding::UTF_8)
-              yielder << line
-            end
-          end
-          # Yield any trailing partial line.
-          yielder << buffer unless buffer.empty?
+          asset.create_asset_urls(values[5])
+          # p "!!! get_published_assets asset #{asset.inspect} urls #{asset.asset_urls.inspect}"
+          asset.save!
         end
       end
     end
-  end
-
-  def self.asset_class_from_asset_type(asset_type)
-    case asset_type
-    when "Standard Page"
-      asset_class = WebpageAsset
-    when "Asset Listing Page"
-      asset_class = WebpageAsset
-    when "DOL Google Sheet viewer"
-      asset_class = DatafileAsset
-    when "DOL LargeImage"
-      asset_class = DatafileAsset
-    when "File"
-      asset_class = DatafileAsset
-    when "Image"
-      asset_class = DatafileAsset
-    when "MS Excel Document"
-      asset_class = DatafileAsset
-    when "MS Word Document"
-      asset_class = DatafileAsset
-    when "PDF File"
-      asset_class = DatafileAsset
-    when "Redirect Page"
-      asset_class = RedirectAsset
-    when "Standard Page"
-      asset_class = WebpageAsset
-    when "Thumbnail"
-      asset_class = DatafileAsset
-    when "Video File"
-      asset_class = DatafileAsset
-    else
-      raise "Website:get_published_assets unknown asset type #{asset_type}"
-    end
-    asset_class
-  end
-
-  def create_asset_urls_from_value(value)
-    url_info = JSON.parse(value)
-    urls = url_info[0].uniq
-    if urls.empty?
-      # Some MS assets have no webpath.
-      case asset_type
-      when "MS Word Document"
-        url = "#{website.url}/__data/assets/word_doc/#{squiz_hash}/#{assetid}/#{name}"
-      when "MS Excel Document"
-        url = "#{website.url}/__data/assets/excel_doc/#{squiz_hash}/#{assetid}/#{name}"
-      end
-      urls = [url]
-    end
-    raise "Asset:create_asset_urls_from_value no URLs assetid #{assetid}" if urls.empty?
-    p "++++ urls #{urls.inspect}"
-    urls.uniq.map do |url|
-      p "++++ url #{url}"
-      raise "Asset:create_asset_urls_from_value duplicate url #{url} assetid #{assetid}" if AssetUrl.where(url: url).exists?
-      # Only accumulate URLs for this website.
-      if website.internal?(url) && !url.include?("/reports/")
-        p "++++ add asset url #{url}"
-        asset_urls << AssetUrl.create(url: url)
-      end
-    end
-    # Return any redirection URL.
-    url_info[1]
   end
 
   def generate(file_root, toc_name)
@@ -144,7 +52,7 @@ class Asset < ApplicationRecord
     @_document ||=
       begin
         p "!!! document url #{asset_urls.first.url}"
-        uri = URI.parse("https://#{asset_urls.first.url}")
+        uri = URI.parse("#{asset_urls.first.url}")
         p "!!! document uri #{uri}"
         response = HTTParty.get(uri, {
           headers: Website.http_headers,
@@ -172,12 +80,12 @@ class Asset < ApplicationRecord
     end
   end
 
-  def url
+  def XXurl
     raise "Asset:url missing url" if asset_urls.empty?
     asset_urls.first.url
   end
 
-  def webpages
+  def XXwebpages
     asset_urls.map(&:webpage)
   end
 
@@ -207,9 +115,11 @@ class Asset < ApplicationRecord
 
   def filename_base = "#{assetid_formatted}-#{name.present? ? "#{safe_name}" : "untitled"}"
 
-  def content_page? = ["Standard Page", "Asset Listing Page", "DOL Google Sheet viewer", "DOL LargeImage"].include? asset_type
+  def content? = is_a?(ContentAsset)
 
-  def redirect_page? = ["Redirect Page"].include? asset_type
+  def redirect? = is_a?(RedirectAsset)
+
+  def data? = is_a?(DataAsset)
 
   def image? = ["Image", "Thumbnail"].include? asset_type
 
@@ -220,6 +130,104 @@ class Asset < ApplicationRecord
   def attachment? = ["File", "MS Excel Document", "MS Word Document", "MP3 File", "Video File"].include? asset_type
 
   def squiz_canonical_url = asset_urls.first.webpage.squiz_canonical_url
+
+  def home? = assetid == HOME_SQUIZ_ASSETID
+
+  def self.home = Asset.find_sole_by(assetid: HOME_SQUIZ_ASSETID)
+
+  def sitemap? = assetid == SITEMAP_ASSETID
+
+  def page_not_found_? = assetid == PAGE_NOT_FOUND_SQUIZ_ASSETID
+
+  def create_asset_urls(value)
+    url_info = JSON.parse(value)
+    urls = url_info[0].uniq
+    if urls.empty?
+      # Some MS assets have no webpath.
+      case asset_type
+      when "MS Word Document"
+        url = "#{website.url}/__data/assets/word_doc/#{squiz_hash}/#{assetid}/#{name}"
+      when "MS Excel Document"
+        url = "#{website.url}/__data/assets/excel_doc/#{squiz_hash}/#{assetid}/#{name}"
+      end
+      urls = [url]
+    end
+    raise "Asset:create_asset_urls no URLs assetid #{assetid}" if urls.empty?
+    urls.uniq.map do |url|
+      raise "Asset:create_asset_urls duplicate url #{url} assetid #{assetid}" if AssetUrl.where(url: url).exists?
+      # Only accumulate URLs for this website.
+      if website.internal?(url) && !url.include?("/reports/")
+        # p "++++ add asset url #{url}"
+        new_asset_url = AssetUrl.find_or_create_by(url: website.normalize(url).to_s)
+        asset_urls << new_asset_url if new_asset_url.new_record?
+      end
+    end
+    # Capture any redirection URL.
+    self.redirect_url = url_info[1] if url_info[1].present?
+  end
+
+  def redirect_url=(url)
+    p "!!! redirect_url= #{url}"
+    raise "Asset:redirect_url= unexpected redirect URL"
+  end
+
+  private
+
+  def self.stream_lines_for_url(url)
+    p "!!! stream_lines_for_url #{url}"
+    uri = URI(url)
+    Enumerator.new do |yielder|
+      Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
+        request = Net::HTTP::Get.new(uri)
+        http.request(request) do |response|
+          buffer = ""
+          response.read_body do |chunk|
+            buffer << chunk
+            while (line = buffer.slice!(/.*?\n/)) # yield full lines
+              line = line.chomp.force_encoding(Encoding::ISO_8859_1).encode(Encoding::UTF_8)
+              yielder << line
+            end
+          end
+          # Yield any trailing partial line.
+          yielder << buffer unless buffer.empty?
+        end
+      end
+    end
+  end
+
+  def self.asset_class_from_asset_type(asset_type)
+    case asset_type
+    when "Standard Page"
+      asset_class = ContentAsset
+    when "Asset Listing Page"
+      asset_class = ContentAsset
+    when "DOL Google Sheet viewer"
+      asset_class = ContentAsset
+    when "DOL LargeImage"
+      asset_class = ContentAsset
+    when "File"
+      asset_class = DataAsset
+    when "Image"
+      asset_class = DataAsset
+    when "MS Excel Document"
+      asset_class = DataAsset
+    when "MS Word Document"
+      asset_class = DataAsset
+    when "PDF File"
+      asset_class = DataAsset
+    when "Redirect Page"
+      asset_class = RedirectAsset
+    when "Standard Page"
+      asset_class = ContentAsset
+    when "Thumbnail"
+      asset_class = DataAsset
+    when "Video File"
+      asset_class = DataAsset
+    else
+      raise "Website:get_published_assets unknown asset type #{asset_type}"
+    end
+    asset_class
+  end
 
   # include/general.inc
   # function get_asset_hash($assetid)
@@ -245,7 +253,6 @@ class Asset < ApplicationRecord
   #
   # }
   def squiz_hash
-    p "!!! squiz_hash assetid #{assetid}"
     assetid = assetid.to_s
     loop do
       hash = assetid.each_char.map(&:to_i).sum

@@ -1,19 +1,19 @@
 %div{id: "#{dom_id website}_page_list"}
   %h2 Unspidered sitemap
-  - unspidered_sitemap_pages = Webpage.where(status: "unspidered")
-  Count: #{unspidered_sitemap_pages.count}
+  - unspidered_sitemap_assets = Asset.where(status: "unspidered")
+  Count: #{unspidered_sitemap_assets.count}
   %table
     %thead
       %th< Asset ID
       %th< Name
       %th< URL
     %tbody
-      - unspidered_sitemap_pages.each do |webpage|
+      - unspidered_sitemap_assets.each do |asset|
         %tr
-          %td<= webpage.asset.assetid
-          %td<= webpage.asset.name
+          %td<= asset.assetid
+          %td<= asset.name
           %td
-            - webpage.asset.asset_urls.each do |asset_url|
+            - asset.asset_urls.each do |asset_url|
               = link_to asset_url.url, "https://#{asset_url.url}", target: :_blank
               %br
   %h2 Asset types
@@ -26,12 +26,13 @@
         %tr
           %td= key
           %td= count
-  %h2 Pages
+  %h2 Assets
   %table
     %tbody
-      - website.webpages.includes(:asset).order(:id).each do |page|
+      - website.assets.order(:id).each do |asset|
         %tr
-          %td<= page.asset.short_name
-          %td<= page.asset.assetid
-          %td<= page.status
-          %td<= page.squiz_canonical_url
+          %td<= asset.short_name
+          %td<= link_to asset.assetid, "#{website.url}/?a=#{asset.assetid}", target: "_blank"
+          %td<= asset.status
+          %td<
+            %a{href: asset.canonical_url, target: "_blank"}<= asset.canonical_url

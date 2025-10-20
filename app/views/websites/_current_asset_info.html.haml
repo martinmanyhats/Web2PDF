@@ -1,0 +1,12 @@
+%div{id: "#{dom_id website}_current_asset_info"}
+  = notice
+  %ul
+    %li
+      Assets: #{website.assets.count}
+    %li
+      Spidered: #{website.assets.where(status: "spidered").count}
+    %li
+      Unspidered: #{website.assets.where(status: "unspidered").count}
+    - if asset.present?
+      %li
+        URL: #{asset.canonical_url}

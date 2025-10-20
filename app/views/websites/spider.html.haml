@@ -3,8 +3,8 @@
 = turbo_stream_from @website
 
 %p
-  Page count: #{@website.webpages.count}
+  Asset count: #{@website.assets.count}
 %p
-  = render partial: "websites/current_webpage_info", locals: {website: @website, webpage: nil}
+  = render partial: "websites/current_asset_info", locals: {website: @website, asset: nil}
 
 = render partial: "page_list", locals: {website: @website}

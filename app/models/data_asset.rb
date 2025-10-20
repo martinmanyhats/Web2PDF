@@ -1,4 +1,4 @@
 # frozen_string_literal: true
 
-class DatafileAsset < Asset
+class DataAsset < Asset
 end

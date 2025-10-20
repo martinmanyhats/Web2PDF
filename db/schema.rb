@@ -33,15 +33,21 @@ ActiveRecord::Schema[8.0].define(version: 2025_09_30_142319) do
   create_table "assets", force: :cascade do |t|
     t.string "type", null: false
     t.integer "website_id", null: false
+    t.string "status"
     t.integer "assetid", null: false
     t.string "asset_type", null: false
     t.string "name", null: false
     t.string "short_name", null: false
+    t.string "canonical_url"
     t.string "redirect_url"
+    t.string "content_html"
     t.string "digest"
+    t.datetime "squiz_updated"
+    t.string "squiz_breadcrumbs"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["assetid"], name: "index_assets_on_assetid", unique: true
+    t.index ["canonical_url"], name: "index_assets_on_canonical_url"
     t.index ["website_id"], name: "index_assets_on_website_id"
   end
 
