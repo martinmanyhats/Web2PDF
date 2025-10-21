@@ -10,8 +10,8 @@
 
 website = Website.create(name: "Deddington History",
                          url: "https://www.deddingtonhistory.uk",
-                         output_root: "/tmp/dh",
-                         status: "unscraped",
+                         output_root_dir: "/tmp/dh",
+                         publish_url: "",
                          remove_scripts: "cookieControl",
                          css: ""
 )
@@ -22,4 +22,3 @@ Asset.create(assetid: 93, asset_type: "Asset Listing Page", name: "Home", short_
 Asset.create(assetid: 121, asset_type: "Standard Page", name: "About DOL", short_name: "About DOL", asset_urls: [AssetUrl.create(url: "www.deddingtonhistory.uk/about")], created_at: now, updated_at: now)
 Asset.create(assetid: 415, asset_type: "Standard Page", name: "Disclaimer", short_name: "Disclaimer", asset_urls: [AssetUrl.create(url: "www.deddingtonhistory.uk/disclaimer")], created_at: now, updated_at: now)
 Asset.create(assetid: 419, asset_type: "Standard Page", name: "Feedback", short_name: "Feedback", asset_urls: [AssetUrl.create(url: "www.deddingtonhistory.uk/feedback")], created_at: now, updated_at: now)
-#Asset.create(assetid: 9658, asset_type: "Standard Page", name: "Privacy Policy", short_name: "Privacy Policy", asset_urls: [AssetUrl.create(url: "www.deddingtonhistory.uk/privacy")], created_at: now, updated_at: now)

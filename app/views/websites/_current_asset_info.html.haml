@@ -7,6 +7,8 @@
       Spidered: #{website.assets.where(status: "spidered").count}
     %li
       Unspidered: #{website.assets.where(status: "unspidered").count}
+    %li
+      Linked: #{website.assets.where(status: "linked").count}
     - if asset.present?
       %li
         URL: #{asset.canonical_url}

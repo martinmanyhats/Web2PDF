@@ -10,16 +10,25 @@ class Asset < ApplicationRecord
   PAGE_NOT_FOUND_SQUIZ_ASSETID = 13267
   DVD_README_ASSETID = 19273
 
-  def self.asset_for_uri(uri) = AssetUrl.find_sole_by(url: "#{uri.host}#{uri.path}").asset
+  def output_dir = self.class.output_dir
 
-  def self.XXasset_for_host_path(host_path) = AssetUrl.find_by(url: host_path).asset
-
-  def self.XXasset_url_for_uri(uri) = AssetUrl.find_sole_by(url: "#{uri.host}#{uri.path}")
+  def self.asset_for_uri(website, uri)
+    return nil if uri.nil?
+    uri = website.normalize(uri)
+    if uri.host != website.host ||
+       uri.path.blank? ||
+       !(uri.scheme == "http" || uri.scheme == "https") ||
+       uri.path.match?(%r{/(mainmenu|reports|sitemap|testing)})
+      p "!!! Asset:asset_for_uri skipping #{uri}"
+      return nil
+    end
+    AssetUrl.remap_and_find_by_uri(website, uri)&.asset
+  end
 
   def self.get_published_assets(website)
-    # p "!!! get_published_assets"
+    p "!!! get_published_assets"
     assets_regex = Regexp.new("tr class=\"squiz_asset\">#{"<td>([^<]*)</td>" * 5}")
-    stream_lines_for_url("#{website.url}/reports/publishedassets").each do |line|
+    stream_lines_for_url("#{website.url}/reports/publishedassets/_recache").each do |line|
       if line =~ /tr class="squiz_asset"/
         values = line.match(assets_regex)
         # p "!!! values #{values.inspect}"
@@ -38,30 +47,7 @@ class Asset < ApplicationRecord
         end
       end
     end
-  end
-
-  def generate(file_root, toc_name)
-    p "!!! generate assetid #{assetid}"
-    filename = filename_from_data_url
-    url = asset_urls.first.url
-    copy_filename = "#{file_root}/#{toc_name.downcase}/#{assetid_formatted}-#{filename}"
-    IO.copy_stream(URI.open("https://#{url}"), copy_filename)
-  end
-
-  def document
-    @_document ||=
-      begin
-        p "!!! document url #{asset_urls.first.url}"
-        uri = URI.parse("#{asset_urls.first.url}")
-        p "!!! document uri #{uri}"
-        response = HTTParty.get(uri, {
-          headers: Website.http_headers,
-        })
-        # TODO: error checking, retry
-        # p "!!! Website:content_for_url headers #{response.headers}"
-        # p "!!! Website:content_for_url body #{response.body.truncate(8000)}"
-        Nokogiri::HTML(response.body)
-      end
+    p "!!! get_published_assets count #{Asset.count}"
   end
 
   def safe_name
@@ -80,56 +66,38 @@ class Asset < ApplicationRecord
     end
   end
 
-  def XXurl
-    raise "Asset:url missing url" if asset_urls.empty?
-    asset_urls.first.url
-  end
-
-  def XXwebpages
-    asset_urls.map(&:webpage)
-  end
-
   def title
     name.present? ? name : short_name
   end
 
-  def filename_with_assetid(suffix, output_dir = nil)
-    output_dir = suffix if output_dir.nil?
-    "#{website.output_root}/#{output_dir}/#{filename_base}.#{suffix}"
-  end
-
-  def XXbasename_with_assetid
-    raise "Asset:basename_with_assetid missing webpage for assetid #{assetid}" if webpage.nil?
-    base = webpage.squiz_canonical_url.gsub(/.*\//, "")
-    "#{assetid_formatted}-#{base}"
+  def filename_with_assetid(suffix)
+    "#{website.output_root_dir}/#{self.class.output_dir}/#{filename_base}.#{suffix}"
   end
 
   def assetid_formatted = ASSETID_FORMAT % assetid
 
-  def filename_from_data_url
-    raise "Asset:filename_from_data_url missing url" if asset_urls.empty?
-    matches = url.match(%r{__data/assets/\w+/\d+/\d+/(.*)$})
-    raise "Asset:filename_from_data_url cannot parse url #{url}" if matches.nil?
-    matches.captures[0]
-  end
-
   def filename_base = "#{assetid_formatted}-#{name.present? ? "#{safe_name}" : "untitled"}"
 
-  def content? = is_a?(ContentAsset)
+  def url
+    raise "Asset:url no asset_urls" if asset_urls.empty?
+    url = asset_urls.first.url
+    raise "Asset:url no url" if url.nil?
+    url
+  end
 
-  def redirect? = is_a?(RedirectAsset)
+  def XXcontent? = is_a?(ContentAsset)
 
-  def data? = is_a?(DataAsset)
+  def XXredirect? = is_a?(RedirectPageAsset)
 
-  def image? = ["Image", "Thumbnail"].include? asset_type
+  def XXdata? = is_a?(DataAsset)
 
-  def pdf? = ["PDF File"].include? asset_type
+  def XXimage? = ["Image", "Thumbnail"].include? asset_type
 
-  def office? = ["MS Excel Document", "MS Word Document"].include? asset_type
+  def XXpdf? = ["PDF File"].include? asset_type
 
-  def attachment? = ["File", "MS Excel Document", "MS Word Document", "MP3 File", "Video File"].include? asset_type
+  def XXoffice? = ["MS Excel Document", "MS Word Document"].include? asset_type
 
-  def squiz_canonical_url = asset_urls.first.webpage.squiz_canonical_url
+  def XXattachment? = ["File", "MS Excel Document", "MS Word Document", "MP3 File", "Video File"].include? asset_type
 
   def home? = assetid == HOME_SQUIZ_ASSETID
 
@@ -171,6 +139,31 @@ class Asset < ApplicationRecord
     raise "Asset:redirect_url= unexpected redirect URL"
   end
 
+  def asset_path
+    ""
+  end
+
+  def self.create_output_dirs(root_dir)
+    Rails.application.eager_load! if Rails.env.development?
+    dirs = Asset.descendants.select { it.respond_to?(:output_dir) }.map { it.output_dir }.uniq
+    dirs << "html"
+    p "!!! dirs #{dirs.inspect}"
+    dirs.each { FileUtils.mkdir_p("#{root_dir}/#{it}") }
+  end
+
+  def update_html_link(node)
+    node['data-w2p-class'] = self.class.name
+    node['data-w2p-type'] = "content"
+    node['data-w2p-assetid'] = assetid.to_s
+  end
+
+  def self.count_with_subclasses(status = nil)
+    types = [name] + descendants.map(&:name)
+    assets = where(type: types)
+    assets = assets.where(status: status) unless status.nil?
+    assets.count
+  end
+
   private
 
   def self.stream_lines_for_url(url)
@@ -196,6 +189,9 @@ class Asset < ApplicationRecord
   end
 
   def self.asset_class_from_asset_type(asset_type)
+    # p "!!! asset_class_from_asset_type #{asset_type}"
+    "#{asset_type.titleize.gsub(" ", "")}Asset".constantize
+=begin
     case asset_type
     when "Standard Page"
       asset_class = ContentAsset
@@ -216,7 +212,7 @@ class Asset < ApplicationRecord
     when "PDF File"
       asset_class = DataAsset
     when "Redirect Page"
-      asset_class = RedirectAsset
+      asset_class = RedirectPageAsset
     when "Standard Page"
       asset_class = ContentAsset
     when "Thumbnail"
@@ -227,39 +223,6 @@ class Asset < ApplicationRecord
       raise "Website:get_published_assets unknown asset type #{asset_type}"
     end
     asset_class
+=end
   end
-
-  # include/general.inc
-  # function get_asset_hash($assetid)
-  # {
-  #         $assetid = trim($assetid);
-  #         do {
-  #                 $hash = 0;
-  #                 $len = strlen($assetid);
-  #                 for ($i = 0; $i < $len; $i++) {
-  #                         if ((int) $assetid{$i} != $assetid{$i}) {
-  #                                 $hash += ord($assetid{$i});
-  #                         } else {
-  #                                 $hash += (int) $assetid{$i};
-  #                         }
-  #                 }
-  #                 $assetid = (string) $hash;
-  #         } while ($hash > SQ_CONF_NUM_DATA_DIRS);
-  #
-  #         while (strlen($hash) != 4) {
-  #                 $hash = '0'.$hash;
-  #         }
-  #         return $hash;
-  #
-  # }
-  def squiz_hash
-    assetid = assetid.to_s
-    loop do
-      hash = assetid.each_char.map(&:to_i).sum
-      assetid = hash.to_s
-      break if hash <= 20 # SQ_CONF_NUM_DATA_DIRS
-    end
-    "%04d" % assetid
-  end
-
 end

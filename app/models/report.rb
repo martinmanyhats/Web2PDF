@@ -2,7 +2,7 @@
 
 class Report
   def self.generate_report(website)
-    reports_dir = "#{website.output_root}/reports"
+    reports_dir = "#{website.output_root_dir}/reports"
     FileUtils.mkdir_p(reports_dir)
 
     report_filename = "#{reports_dir}/report-#{DateTime.now.strftime('%Y%m%d')}.xlsx"

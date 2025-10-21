@@ -1,7 +1,5 @@
 Rails.application.routes.draw do
-  resources :weblinks
-  resources :pdfs
-  resources :webpages
+  # resources :pdfs
   resources :users
   resources :websites do
     member do

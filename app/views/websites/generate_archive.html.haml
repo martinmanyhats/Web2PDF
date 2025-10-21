@@ -1,22 +1,15 @@
 %h1 Generate Archive
 %ul
   %li
-    %a{href: "#webpages"}< Webpages
+    %a{href: "#assets"}< Assets (#{@website.assets.count})
   %li
-    %a{href: "#images"}< Images
+    %a{href: "#content"}< Content (#{ContentAsset.count_with_subclasses("spidered")})
   %li
-    %a{href: "#pdfs"}< PDFs
-%h2{id: "webpages"} Webpages
+    %a{href: "#pdfs"}< PDF (#{PdfFileAsset.count_with_subclasses("linked")})
+%h2{id: "content"} Content
 %table
   %tbody
-    - @website.webpages.includes(:asset).each do |page|
-      %tr
-        %td<= page.asset.assetid
-        %td<= page.squiz_canonical_url
-%h2{id: "images"} Images
-%table
-  %tbody
-    - @website.image_assets&.each do |asset|
+    - ContentAsset.where(status: "spidered").each do |asset|
       %tbody
         %tr
           %td<= asset.assetid
@@ -25,7 +18,7 @@
 %h2{id: "pdfs"} PDFs
 %table
   %tbody
-    - @website.pdf_assets&.each do |asset|
+    - PdfFileAsset.where(status: "linked").each do |asset|
       %tbody
         %tr
           %td<= asset.assetid

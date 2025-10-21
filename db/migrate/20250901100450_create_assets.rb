@@ -3,8 +3,8 @@ class CreateAssets < ActiveRecord::Migration[8.0]
     create_table :assets do |t|
       t.string :type, null: false
       t.references :website, null: false, foreign_key: true
-      t.string :status
       t.integer :assetid, null: false, index: { unique: true }
+      t.string :status
       t.string :asset_type, null: false
       t.string :name, null: false
       t.string :short_name, null: false
