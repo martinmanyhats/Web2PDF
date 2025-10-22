@@ -1,21 +1,24 @@
 # frozen_string_literal: true
 
 class ContentAsset < Asset
-  def self.generate(assetids: nil, head: head, html_filename: nil, pdf_filename: nil)
+  scope :publishable, -> { where(status: "spidered") }
+
+  def self.generate(assetids: nil)
     if assetids.nil?
-      assets = ContentAsset.where(status: "spidered")
+      assets = ContentAsset.publishable
     else
       assets = ContentAsset.where(assetid: assetids)
     end
-    assets.each { it.generate(head: head, html_filename: html_filename, pdf_filename: pdf_filename) }
-    # generate_data_toc
+    assets.each { it.generate }
   end
 
   def generate(head: head, html_filename: nil, pdf_filename: nil)
-    p "!!! ContentAsset:generate assetid #{assetid}"
-    raise "ContentAsset:generate unspidered assetid #{assetid}" if status == "unspidered"
+    p "!!! ContentAsset:with_root assetid #{assetid} html_filename #{html_filename} pdf_filename #{pdf_filename}"
+    raise "ContentAsset:with_root unspidered assetid #{assetid}" if status == "unspidered"
     head = website.html_head(title: short_name) if head.nil?
-    html_filename = filename_with_assetid("html") if html_filename.nil?
+    html_filename = filename_with_assetid("html", "html") if html_filename.nil?
+    pdf_filename = filename_with_assetid(self.class.output_dir, "pdf") if pdf_filename.nil?
+    p "!!! ContentAsset:with_root assetid #{assetid} html_filename #{html_filename} pdf_filename #{pdf_filename}"
     File.open(html_filename, "wb") do |file|
       file.write("<html>\n#{head}\n")
       body = Nokogiri::HTML("<div class='w2p-content'>#{content_html}</div>").css("body").first
@@ -31,7 +34,6 @@ class ContentAsset < Asset
       Browser.instance.html_to_pdf(html_filename, pdf_filename)
       return
     end
-    raise "ContentAsset:generate unable to create #{filename}"
   end
 
   def header_html
@@ -58,7 +60,7 @@ class ContentAsset < Asset
     @_document ||=
       begin
         uri = URI.parse("#{asset_urls.first.url}")
-        p ">>>>>>>>>>>>>>>>>>>> document HTTParty.get uri #{uri}"
+        # p ">>>>>>>>>>>>>>>>>>>> document HTTParty.get uri #{uri}"
         response = HTTParty.get(uri, {
           headers: Website.http_headers,
         })
@@ -74,6 +76,15 @@ class ContentAsset < Asset
     super
   end
 
+  def generated_filename
+    "#{website.web_root}/page/#{filename_base}.pdf"
+  end
+
+  def filename_base
+    raise "ContentAsset:filename_base name missing" if name.nil?
+    "#{assetid_formatted}-#{name.present? ? "#{safe_name}" : "untitled"}"
+  end
+
   private
 
   def self.output_dir = "page"
@@ -85,7 +96,6 @@ class ContentAsset < Asset
       raise "ContentAsset:generate_html_links url missing in assetid #{assetid}" if url.blank?
       link_type = link["data-w2p-type"]
       next if link_type == "external"
-      # next if url.blank? # Faulty links in content.
       link_assetid = link.attributes["data-w2p-assetid"]&.value
       raise "ContentAsset:generate_html_links missing link_assetid in #{assetid} url #{url}" if link_assetid.nil?
       p "!!! generate_html_links assetid #{assetid} link_assetid #{link_assetid} url #{url}"
@@ -94,59 +104,19 @@ class ContentAsset < Asset
       case linked_asset
       when ContentAsset
         p "!!! internally linking to content #{url} #{linked_asset.title}"
-        link.attributes["href"].value = generated_filename
+        link.attributes["href"].value = linked_asset.generated_filename
       when DataAsset
-        p "!!! internally linking to data #{url}"
-        link.attributes["href"].value = "#{website.web_root}/page/#{filename_base}.pdf"
+        p "!!! DataAsset website #{website.inspect}"
+        # data_url = "#{website.output_root_dir}/#{linked_asset.output_dir}/#{linked_asset.filename_base}"
+        data_url = linked_asset.generated_filename
+        p "!!! internally linking #{url} to #{data_url}"
+        link.attributes["href"].value = data_url
+      else
+        raise "ContentAsset:generate_html_links unexpected class"
       end
-      p "!!! BODY #{body.to_html}"
+      # p "!!! BODY #{body.to_html}"
     end
   end
-
-  def generated_filename
-    "#{website.web_root}/page/#{filename_base}.pdf"
-  end
-
-=begin
-  def XXgenerate_html_link(url)
-    p "!!! generate_html_link url #{url.inspect}"
-    return "" if url.blank? # Faulty links in content.
-    uri = website.normalize(url)
-    asset = Asset.asset_for_uri(website, uri)
-    p "!!! generate_html_link uri #{uri} asset #{asset.inspect}"
-    return url if asset.nil?
-    if asset.redirect_url
-      p "!!! generate_html_link redirect #{asset.redirect_url}"
-      # Spidering has already recursively resolved redirects, but it may be external.
-      # TODO spider resolution needs to result in host path
-      p "!!! website.normalize(asset.redirect_url).host #{website.normalize(asset.redirect_url).host}"
-      # Do nothing if external URL.
-      return asset.redirect_url if website.normalize(asset.redirect_url).host != website.host
-      return generate_html_link(asset.redirect_url)
-    elsif asset.content_page?
-      dest_page = Webpage.find_by(asset_id: asset.id)
-      raise "Webpage:generate_html_link cannot find dest_page assetid #{assetid} link #{link} uri #{uri}" unless dest_page
-      p "!!! internally linking to #{uri.to_s} #{dest_page.title}"
-      # asset_url = Asset.asset_url_for_uri(uri)
-      # asset_url.webpage = self
-      # asset_url.save!
-      return "#{website.web_root}/page/#{dest_page.asset.filename_base}.pdf"
-    elsif asset.pdf?
-      website.add_pdf(asset)
-      return "#{website.web_root}/pdf/#{assetid_formatted}-#{asset.name}"
-    elsif asset.image?
-      website.add_image(asset)
-      return "#{website.web_root}/image/#{assetid_formatted}-#{asset.name}"
-    elsif asset.office?
-      website.add_office(asset)
-      return "#{website.web_root}/pdf/#{assetid_formatted}-#{asset.name}.pdf"
-    else
-      p ">>>>>>>>>> IGNORING url #{url}"
-      website.log(:ignored_links, "assetid #{assetid} url #{url}")
-      return url
-    end
-  end
-=end
 
   def generate_external_links(parsed_content)
     parsed_content.css("iframe").each do |iframe|

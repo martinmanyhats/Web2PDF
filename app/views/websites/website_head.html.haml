@@ -1,6 +1,6 @@
 %head
     %title<
-        = title
+        = CGI.unescapeHTML(title).html_safe
         = website.name
     :css
         body {

@@ -74,32 +74,11 @@ class Spider
       p "!!! Spider:spider_link redirected linked_asset #{linked_asset.inspect}"
     end
 
-    # linked_asset.extract_content_info if linked_asset.respond_to?(:extract_content_info)
     linked_asset.update_html_link(node)
-    Rails.logger.silence { linked_asset.save! }
-  end
-
-  def XXgenerate(head: head, html_filename: nil, pdf_filename: nil)
-    p "!!! generate id #{id} assetid #{assetid} #{html_filename} #{pdf_filename}"
-    raise "Spider:generate unspidered id #{id}" if status == "unspidered"
-    raise "Spider:generate missing head id #{id}" if head.nil?
-    html_filename = asset.filename_with_assetid("html") if html_filename.nil?
-    File.open(html_filename, "wb") do |file|
-      file.write("<html>\n#{head}\n")
-      body = Nokogiri::HTML("<div class='w2p-content'>#{content}</div>").css("body").first
-      body["data-assetid"] = assetid_formatted
-      body.first_element_child.before(Nokogiri::XML::DocumentFragment.parse(header_html))
-      generate_html_links(body)
-      generate_external_links(body)
-      # generate_images(body)
-      file.write(body.to_html)
-      file.write("</html>\n")
-      file.close
-      save!
-      Browser.instance.html_to_pdf(basename: asset.filename_base, html_filename: html_filename, pdf_filename: pdf_filename)
-      return
+    Rails.logger.silence do
+      Link.create!(source: @asset, destination: linked_asset)
+      linked_asset.save!
     end
-    raise "Spider:generate unable to create #{filename}"
   end
 
   def generate_external_links(parsed_content)
@@ -107,40 +86,6 @@ class Spider
       p "!!! generate_external_links #{iframe["src"].inspect}"
       iframe.add_next_sibling("<p class='iframe-comment'>External URL: <a href='#{iframe["src"]}'>#{iframe["src"]}</a></p>")
     end
-  end
-
-  def XXgenerate_images(parsed_content)
-    p "!!! generate_images"
-  end
-
-  def XXprocess_images(body)
-    parsed_content.css("img").each do |image|
-      p "!!! image #{image["src"]}"
-      url = image["src"]
-      case File.extname(url).downcase
-      when ".jpg"
-        p "!!! JPG"
-      when ".png"
-        p "!!! PNG"
-      when ".gif"
-        p "!!! GIF"
-      else
-        p "!!! unknown image type"
-      end
-    end
-  end
-
-  def XXspiderable_images(parsed_content)
-    parsed_content.css("img").each do |image|
-      p "!!! image src #{image["src"]}"
-    end
-  end
-
-  def XXspiderable_external_elements(parsed_content)
-    # Skip anchors and links with same page.
-    parsed_content.css("iframe")
-                  .select { |a| !a["href"].start_with?("#") }
-                  .compact
   end
 
   def uri_from_link_node(node)

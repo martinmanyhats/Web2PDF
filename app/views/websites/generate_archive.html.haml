@@ -9,7 +9,7 @@
 %h2{id: "content"} Content
 %table
   %tbody
-    - ContentAsset.where(status: "spidered").each do |asset|
+    - false && ContentAsset.where(status: "spidered").each do |asset|
       %tbody
         %tr
           %td<= asset.assetid
@@ -18,7 +18,7 @@
 %h2{id: "pdfs"} PDFs
 %table
   %tbody
-    - PdfFileAsset.where(status: "linked").each do |asset|
+    - false && PdfFileAsset.where(status: "linked").each do |asset|
       %tbody
         %tr
           %td<= asset.assetid

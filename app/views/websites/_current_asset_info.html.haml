@@ -1,14 +1,14 @@
 %div{id: "#{dom_id website}_current_asset_info"}
   = notice
-  %ul
-    %li
-      Assets: #{website.assets.count}
-    %li
-      Spidered: #{website.assets.where(status: "spidered").count}
-    %li
-      Unspidered: #{website.assets.where(status: "unspidered").count}
-    %li
-      Linked: #{website.assets.where(status: "linked").count}
-    - if asset.present?
+  - Rails.logger.silence do
+    %ul
       %li
-        URL: #{asset.canonical_url}
+        ContentAsset: #{ContentAsset.publishable.count} of #{ContentAsset.count}
+      %li
+        Unspidered: #{website.assets.where(status: "unspidered").count}
+      - DataAsset.subclasses.sort_by(&:name).each do |subclass|
+        %li
+          #{subclass.name}: #{subclass.publishable.count} of #{subclass.count}
+      - if asset.present?
+        %li
+          URL: #{asset.canonical_url}

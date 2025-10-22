@@ -1,6 +1,9 @@
 class Asset < ApplicationRecord
   belongs_to :website
   has_many :asset_urls
+  has_many :links, dependent: :destroy, foreign_key: "source_id"
+  has_many :destinations, through: :links
+  has_many :sources, through: :links
 
   ASSETID_FORMAT = "%06d".freeze
   SAFE_NAME_REPLACEMENT = "_".freeze
@@ -28,7 +31,7 @@ class Asset < ApplicationRecord
   def self.get_published_assets(website)
     p "!!! get_published_assets"
     assets_regex = Regexp.new("tr class=\"squiz_asset\">#{"<td>([^<]*)</td>" * 5}")
-    stream_lines_for_url("#{website.url}/reports/publishedassets/_recache").each do |line|
+    stream_lines_for_url("#{website.url}/reports/publishedassets").each do |line|
       if line =~ /tr class="squiz_asset"/
         values = line.match(assets_regex)
         # p "!!! values #{values.inspect}"
@@ -55,7 +58,7 @@ class Asset < ApplicationRecord
     raise "Asset:safe_name missing name or short_name assetid #{asset.assetid}" if sname.blank?
 
     sname = sname.downcase
-    # Also replace '.' to vaoid suffix confusion.
+    sname = sname.gsub("&amp;", "_and_")
     sname = sname.gsub(/[^a-z0-9\-]+/, SAFE_NAME_REPLACEMENT)
     sname = sname.gsub(/#{SAFE_NAME_REPLACEMENT}+|#{SAFE_NAME_REPLACEMENT}-#{SAFE_NAME_REPLACEMENT}/, SAFE_NAME_REPLACEMENT)
     sname = sname.gsub(/^#{SAFE_NAME_REPLACEMENT}|#{SAFE_NAME_REPLACEMENT}$/, "")
@@ -70,13 +73,11 @@ class Asset < ApplicationRecord
     name.present? ? name : short_name
   end
 
-  def filename_with_assetid(suffix)
-    "#{website.output_root_dir}/#{self.class.output_dir}/#{filename_base}.#{suffix}"
+  def filename_with_assetid(dir, suffix)
+    "#{website.output_root_dir}/#{dir}/#{filename_base}.#{suffix}"
   end
 
   def assetid_formatted = ASSETID_FORMAT % assetid
-
-  def filename_base = "#{assetid_formatted}-#{name.present? ? "#{safe_name}" : "untitled"}"
 
   def url
     raise "Asset:url no asset_urls" if asset_urls.empty?
@@ -153,7 +154,7 @@ class Asset < ApplicationRecord
 
   def update_html_link(node)
     node['data-w2p-class'] = self.class.name
-    node['data-w2p-type'] = "content"
+    node['data-w2p-type'] = "asset"
     node['data-w2p-assetid'] = assetid.to_s
   end
 

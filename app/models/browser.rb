@@ -3,7 +3,7 @@ class Browser
 
   def html_to_pdf(html_filename, pdf_filename, landscape: true, content: nil)
     p "!!! html_to_pdf #{html_filename} #{pdf_filename}"
-    raise "Browser:html_to_pdf missing file_root" if @file_root.nil?
+    # raise "Browser:html_to_pdf missing file_root" if @file_root.nil?
     if content.present?
       raise "Browser:html_to_pdf content provided but HTML file already exists #{html_filename}" if File.exist?(html_filename)
       File.write(html_filename, content)
@@ -23,19 +23,19 @@ class Browser
     browser.reset
   end
 
-  def generate(file_root)
-    @file_root = file_root
+  def with_root(file_root)
+    # @file_root = file_root
     begin
       yield
     rescue => e
       puts e.backtrace
-      raise "Browser:generate failed #{e.inspect}"
+      raise "Browser:with_root failed #{e.inspect}"
     ensure
       browser.quit
       @browser = nil
-      @file_root = nil
+      # @file_root = nil
     end
-    p "!!! generate done"
+    p "!!! with_root done"
   end
 
   private
@@ -45,7 +45,7 @@ class Browser
       browser_options: {
         timeout: 90,
         protocol_timeout: 60,
-        "generate-pdf-document-outline": true,
+        with_root: true,
         "user-agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36"
       }
     )

@@ -36,7 +36,7 @@ module Web2Pdf
     # config.time_zone = "Central Time (US & Canada)"
     # config.eager_load_paths << Rails.root.join("extras")
 
-    # Don't generate system test files.
+    # Don't with_root system test files.
     config.generators.system_tests = nil
     config.filter_parameters += [ :content_for_url ]
   end

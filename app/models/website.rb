@@ -5,9 +5,6 @@ class Website < ApplicationRecord
   after_update_commit -> { broadcast_refresh_later }
 
   attr_reader :web_root
-  attr_reader :pdf_assets
-  # attr_reader :image_assets
-  # attr_reader :office_assets
 
   FileAsset = Struct.new(:assetid, :short_name, :filename, :url, :digest)
 
@@ -15,29 +12,13 @@ class Website < ApplicationRecord
     p "!!! Website::spider options #{options.inspect} #{inspect}"
     Asset.get_published_assets(self) unless options[:skipassets].present?
     notify_page_list
-    if options[:assetid]
-      spider_one(options[:assetid].to_i)
-    else
-      spider_all(options)
-    end
+    spider_content(options)
     notify_page_list
     Report::generate_report(self)
   end
 
-  def spider_one(assetid)
-    p "!!! spider_one assetid #{assetid}"
-    asset = Asset.find_by(assetid: assetid)
-    raise "Website:spider_one not content" unless asset.is_a?(ContentAsset)
-    asset.extract_content_info
-    asset.save!
-    notify_current_asset(asset, "spidering")
-    spider = Spider.new(self)
-    spider.spider_asset(asset)
-    notify_current_asset(nil, "spider complete")
-  end
-
-  def spider_all(options = {})
-    p "!!! spider_all options #{options.inspect} #{inspect}"
+  def spider_content(options = {})
+    p "!!! spider_content options #{options.inspect} #{inspect}"
     home_asset = Asset.home
     home_asset.status = "unspidered"
     home_asset.save!
@@ -45,7 +26,7 @@ class Website < ApplicationRecord
     spider = Spider.new(self)
     loop do
       unspidered_assets = Asset.where(status: "unspidered").order(:id)
-      p "!!! Website::spider unspidered_assets.count #{unspidered_assets.count}"
+      p "!!! Website::spider_content unspidered_assets.count #{unspidered_assets.count}"
       break if unspidered_assets.empty?
       unspidered_assets.each do |asset|
         notify_current_asset(asset, "spidering")
@@ -59,9 +40,6 @@ class Website < ApplicationRecord
     p "!!! Website:generate_archive options #{options.inspect}"
     FileUtils.remove_entry_secure(output_root_dir) if File.exist?(output_root_dir)
     Asset.create_output_dirs(output_root_dir)
-    @pdf_assets = Set.new
-    @image_assets = Set.new
-    @office_assets = Set.new
     if options[:webroot].present?
       @web_root = options[:webroot]
     else
@@ -75,16 +53,42 @@ class Website < ApplicationRecord
       assetids = nil
     end
     p "!!! Website:generate_archive assetids #{assetids.inspect}"
-    Browser.instance.generate(output_root_dir) do
-      # generate_readme
+    Browser.instance.with_root(output_root_dir) do
+      generate_readme
       ContentAsset.generate(assetids: assetids)
-      # generate_content_toc(assetids: assetids)
-      # generate_sitemap
+      generate_sitemap
     end
-    DataAsset.generate(output_root_dir)
+    PdfFileAsset.generate(output_root_dir)
     # generate_assets("Image", @image_assets)
     # generate_assets("PDF", @pdf_assets)
     # generate_assets("Office", @office_assets)
+  end
+
+  def generate_readme
+    readme = Asset.find_sole_by(assetid: Asset::DVD_README_ASSETID)
+    readme.extract_content_info
+    html_filename = "#{output_root_dir}/html/readme.html"
+    pdf_filename = "#{output_root_dir}/readme.pdf"
+    readme.generate(html_filename: html_filename, pdf_filename: pdf_filename)
+  end
+
+  def generate_sitemap
+    p "!!! Website:generate_sitemap"
+    document = Nokogiri::HTML(URI.open("#{url}/sitemap"))
+    html_filename = "#{output_root_dir}/html/sitemap.html"
+    File.open(html_filename, "w") do |file|
+      file.write("<html>\n#{html_head(title: "Sitemap")}\n<h1>Sitemap</h1>\n<ul class='w2p-toc-contents'>\n")
+      document.css("#main-content > table > tr > td > table a").map do |link|
+        p "!!! generate_sitemap link #{link.inspect}"
+        next if link.content.starts_with?("((")
+        depth = link.css_path.scan(/table/).count - 2
+        url = canonical_url_for_url(link["href"])
+        file.write("<li style='padding-left:#{depth * 8}px'><a href='#{url}'>#{link.content}</li>\n")
+      end
+      file.write("</ul>\n</html>\n")
+      file.close
+      Browser.instance.html_to_pdf(html_filename, "#{output_root_dir}/sitemap.pdf", landscape: false)
+    end
   end
 
   def internal?(url_or_uri)
@@ -97,104 +101,6 @@ class Website < ApplicationRecord
 
   def host
     @_host ||= Addressable::URI.parse(url).host
-  end
-
-=begin
-  def add_pdf(asset)
-    p "!!! add_pdf assetid #{asset.assetid}"
-    raise "Website:add_pdf no urls" if asset.asset_urls.empty?
-    @pdf_assets << asset
-  end
-
-  def add_image(asset)
-    p "!!! add_image assetid #{asset.assetid}"
-    raise "Website:add_image no urls" if asset.asset_urls.empty?
-    @image_assets << asset
-  end
-
-  def add_office(asset)
-    p "!!! add_office assetid #{asset.assetid}"
-    raise "Website:add_office no urls" if asset.asset_urls.empty?
-    @office_assets << asset
-  end
-=end
-
-  def generate_readme
-    readme = Asset.find_sole_by(assetid: Asset::DVD_README_ASSETID)
-    readme.extract_info_from_document
-    html_filename = "#{output_root_dir}/html/readme.html"
-    pdf_filename = "#{output_root_dir}/readme.pdf"
-    # readme.generate(head: html_head(title: readme.asset.short_name), html_filename: html_filename, pdf_filename: pdf_filename)
-    readme.generate(html_filename: html_filename, pdf_filename: pdf_filename)
-  end
-
-  def generate_content
-    p "!!! Website:generate_content count #{assets.count}"
-    ContentAsset.all.each { it.generate(head: html_head(title: it.asset.short_name)) }
-  end
-
-  def generate_content_toc
-    toc_basename = "toc-content"
-    toc_filename = "#{output_root_dir}/html/#{toc_basename}.html"
-    File.open(toc_filename, "w") do |file|
-      file.write("<html>\n#{html_head(title: "Contents")}\n<h1>Table of Contents</h1>")
-      file.write("<ul class='w2p-toc-contents'>\n")
-      ContentAsset.order(:id).each do |asset|
-        indent = (12 * (asset.asset_path.count("/") - 2)).clamp(0, Float::INFINITY)
-        p "!!! indent asset.assetid #{asset.assetid} #{indent} count #{asset.asset_path.count("/")}"
-        file.write("<li style='padding-left:#{indent}px'><a href='#{asset.filename_with_assetid("pdf")}'>#{asset.name}</a></td>\n")
-      end
-      file.write("</ul>\n</html>\n")
-      file.close
-      Browser.instance.html_to_pdf(toc_filename, "#{output_root_dir}/pdf/#{toc_basename}.pdf")
-    end
-  end
-
-  def generate_sitemap
-    p "!!! Website:generate_sitemap"
-    document = Nokogiri::HTML(URI.open("#{url}/sitemap"))
-    File.open("#{output_root_dir}/html/sitemap.html", "w") do |file|
-      file.write("<html>\n#{html_head(title: "Sitemap")}\n<h1>Sitemap</h1>\n<ul class='w2p-toc-contents'>\n")
-      document.css("#main-content > table > tr > td > table a").map do |link|
-        p "!!! generate_sitemap link #{link.inspect}"
-        next if link.content.starts_with?("((")
-        depth = link.css_path.scan(/table/).count - 2
-        url = canonical_url_for_url(link["href"])
-        file.write("<li style='padding-left:#{depth * 8}px'><a href='#{url}'>#{link.content}</li>\n")
-      end
-      file.write("</ul>\n</html>\n")
-      file.close
-      Browser.instance.html_to_pdf(basename: "sitemap", landscape: false)
-    end
-  end
-
-  def generate_assets(toc_name, assets)
-    p "!!! generate_assets #{toc_name} assets.count #{assets.count}"
-    assets.each { it.generate(output_root_dir, toc_name)}
-    generate_assets_toc(toc_name, assets)
-  end
-
-  def generate_assets_toc(toc_name, assets)
-    p "!!! generate_assets_toc #{toc_name.downcase} assets.count #{assets.count}"
-    p "!!! generate_assets_toc #{toc_name.downcase} assets #{assets.inspect}"
-    toc_basename = "toc-#{toc_name.downcase.pluralize}"
-    toc_filename = "#{output_root_dir}/html/#{toc_basename}.html"
-    File.open(toc_filename, "w") do |file|
-      file.write("<html>\n#{html_head(title: toc_name.pluralize)}\n<h1>Table of #{toc_name.pluralize}</h1>")
-      file.write("<table><thead><th>#{toc_name}</th><th>Referring pages</th></thead>\n")
-      assets.sort_by { it.name.downcase }.each do |asset|
-        references = asset.asset_urls.map do |asset_url|
-          # asset_url.webpages.map { "<a href='#{web_root}/#{it.asset.filename_with_assetid(toc_name)}'>#{it.title}</a>" }.join(", ")
-        end.join("<br />")
-        file.write("<tr>")
-        file.write("<td><a href='#{output_root_dir}/#{toc_name.downcase}/#{asset.assetid_formatted}-#{asset.name}'>#{asset.name}</a></td>\n")
-        file.write("<td>#{references}</td\n")
-        file.write("</tr>")
-      end
-      file.write("</table>\n</html>\n")
-      file.close
-      Browser.instance.html_to_pdf(toc_filename, "#{output_root_dir}/pdf/#{toc_basename}.pdf")
-    end
   end
 
   def self.http_headers
@@ -302,16 +208,16 @@ class Website < ApplicationRecord
     end
   end
 
-  def XXcanonical_url_for_url(url)
+  def canonical_url_for_url(url)
     uri = normalize(url)
     return url if uri.host != host
     p "!!! canonical_url_for_url #{url} uri #{uri}"
     # Some redirected links are direct to a PDF.
     return url if uri.path.match?(/.pdf$/i)
     asset = Asset.asset_for_uri(self, uri)
-    if asset.content_page?
-      Webpage.find_sole_by(asset: asset).squiz_canonical_url
-    elsif asset.redirect_page?
+    if asset.is_a?(ContentAsset)
+      asset.canonical_url
+    elsif asset.is_a?(RedirectPageAsset)
       p "!!! canonical_url_for_url redirecting to #{asset.redirect_url}"
       canonical_url_for_url(asset.redirect_url)
     else
