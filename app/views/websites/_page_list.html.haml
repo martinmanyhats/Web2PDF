@@ -1,21 +1,4 @@
 %div{id: "#{dom_id website}_page_list"}
-  %h2 Unspidered sitemap
-  - unspidered_sitemap_assets = Asset.where(status: "unspidered")
-  Count: #{unspidered_sitemap_assets.count}
-  %table
-    %thead
-      %th< Asset ID
-      %th< Name
-      %th< URL
-    %tbody
-      - unspidered_sitemap_assets.each do |asset|
-        %tr
-          %td<= asset.assetid
-          %td<= asset.name
-          %td
-            - asset.asset_urls.each do |asset_url|
-              = link_to asset_url.url, "https://#{asset_url.url}", target: :_blank
-              %br
   %h2 Asset types
   %table
     %thead

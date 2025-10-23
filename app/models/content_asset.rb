@@ -17,7 +17,7 @@ class ContentAsset < Asset
     raise "ContentAsset:with_root unspidered assetid #{assetid}" if status == "unspidered"
     head = website.html_head(title: short_name) if head.nil?
     html_filename = filename_with_assetid("html", "html") if html_filename.nil?
-    pdf_filename = filename_with_assetid(self.class.output_dir, "pdf") if pdf_filename.nil?
+    pdf_filename = filename_with_assetid(output_dir, "pdf") if pdf_filename.nil?
     p "!!! ContentAsset:with_root assetid #{assetid} html_filename #{html_filename} pdf_filename #{pdf_filename}"
     File.open(html_filename, "wb") do |file|
       file.write("<html>\n#{head}\n")
@@ -65,8 +65,6 @@ class ContentAsset < Asset
           headers: Website.http_headers,
         })
         # TODO: error checking, retry
-        # p "!!! Website:content_for_url headers #{response.headers}"
-        # p "!!! Website:content_for_url body #{response.body.truncate(8000)}"
         Nokogiri::HTML(response.body)
       end
   end
@@ -77,7 +75,9 @@ class ContentAsset < Asset
   end
 
   def generated_filename
-    "#{website.web_root}/page/#{filename_base}.pdf"
+    raise "generated_filename website nil" if website.nil?
+    raise "generated_filename website.output_root_dir nil" if website.output_root_dir.nil?
+    "#{website.output_root_dir}/page/#{filename_base}.pdf"
   end
 
   def filename_base
@@ -91,31 +91,45 @@ class ContentAsset < Asset
 
   def generate_html_links(body)
     body.css("a[data-w2p-type]").each do |link|
-      p "!!! generate_html_links link #{link.inspect}"
-      url = link["href"]
-      raise "ContentAsset:generate_html_links url missing in assetid #{assetid}" if url.blank?
+      # p "!!! generate_html_links link #{link.inspect}"
       link_type = link["data-w2p-type"]
-      next if link_type == "external"
-      link_assetid = link.attributes["data-w2p-assetid"]&.value
-      raise "ContentAsset:generate_html_links missing link_assetid in #{assetid} url #{url}" if link_assetid.nil?
-      p "!!! generate_html_links assetid #{assetid} link_assetid #{link_assetid} url #{url}"
-      linked_asset = Asset.find_by(assetid: link_assetid)
-      p "!!! linked_asset #{linked_asset.inspect}"
-      case linked_asset
-      when ContentAsset
-        p "!!! internally linking to content #{url} #{linked_asset.title}"
-        link.attributes["href"].value = linked_asset.generated_filename
-      when DataAsset
-        p "!!! DataAsset website #{website.inspect}"
-        # data_url = "#{website.output_root_dir}/#{linked_asset.output_dir}/#{linked_asset.filename_base}"
-        data_url = linked_asset.generated_filename
-        p "!!! internally linking #{url} to #{data_url}"
-        link.attributes["href"].value = data_url
+      case link_type
+      when "asset"
+        generate_asset_html_link(link)
+      when "static"
+        generate_static_html_link(link)
+      when "external"
+        # Nothing.
       else
-        raise "ContentAsset:generate_html_links unexpected class"
+        raise "ContentAsset:generate_html_links unexpected link_type #{link_type}"
       end
-      # p "!!! BODY #{body.to_html}"
     end
+  end
+
+  def generate_asset_html_link(link)
+    url = link["href"]
+    raise "ContentAsset:generate_asset_html_link url missing in assetid #{assetid}" if url.blank?
+    link_assetid = link.attributes["data-w2p-assetid"]&.value
+    raise "ContentAsset:generate_asset_html_link missing link_assetid in #{assetid} url #{url}" if link_assetid.nil?
+    p "!!! generate_asset_html_link assetid #{assetid} link_assetid #{link_assetid} url #{url}"
+    linked_asset = Asset.find_by(assetid: link_assetid)
+    # p "!!! linked_asset #{linked_asset.inspect}"
+    case linked_asset
+    when ContentAsset
+      p "!!! generate_asset_html_link internally linking to content #{url} #{linked_asset.title}"
+      link["href"] = linked_asset.generated_filename
+    when DataAsset
+      data_url = linked_asset.generated_filename
+      p "!!! generate_asset_html_link internally linking #{url} to #{data_url}"
+      link["href"] = data_url
+    else
+      raise "ContentAsset:generate_asset_html_link unexpected class"
+    end
+  end
+
+  def generate_static_html_link(link)
+    p "!!! generate_static_html_link link #{link.inspect}"
+    link["href"] = "#{website.output_root_dir}#{link["href"]}"
   end
 
   def generate_external_links(parsed_content)

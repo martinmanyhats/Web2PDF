@@ -606,13 +606,8 @@
         .w2p-toc {
             border-spacing: 12px 0px;
         }
-        .w2p-toc-contents {
-            Xcolumn-count: 2;
-            Xcolumn-gap: 20px;
-        }
-        .w2p-toc-contents li {
-            list-style: none;
-            break-inside: avoid;
+        .w2p-toc td {
+            vertical-align: top;
         }
         .w2p-timestamp {
             text-align: right;
@@ -625,7 +620,7 @@
             text-decoration: none;
         }
         @media print {
-            .w2p-toc-contents li {
+            .w2p-toc tr {
                 page-break-inside: avoid;
             }
         }

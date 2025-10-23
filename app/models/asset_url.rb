@@ -13,9 +13,11 @@ class AssetUrl < ApplicationRecord
     end
   end
 
-  def self.remap_and_find_by_uri(asset, uri)
-    asset_url = AssetUrl.find_by(url: AssetUrl.remap_uri(asset, uri).to_s)
-    raise "AssetUrl:remap_and_find_by_host_path uri not found #{uri} from assetid #{asset.assetid}" if asset_url.nil?
-    asset_url
+  def self.remap_and_find_by_uri(website, uri)
+    Rails.logger.silence do
+      asset_url = AssetUrl.find_by(url: AssetUrl.remap_uri(website, uri).to_s)
+      raise "AssetUrl:remap_and_find_by_uri uri not found #{uri}" if asset_url.nil?
+      asset_url
+    end
   end
 end

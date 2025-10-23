@@ -3,9 +3,9 @@
   - Rails.logger.silence do
     %ul
       %li
-        ContentAsset: #{ContentAsset.publishable.count} of #{ContentAsset.count}
-      %li
         Unspidered: #{website.assets.where(status: "unspidered").count}
+      %li
+        ContentAsset: #{ContentAsset.publishable.count} of #{ContentAsset.count}
       - DataAsset.subclasses.sort_by(&:name).each do |subclass|
         %li
           #{subclass.name}: #{subclass.publishable.count} of #{subclass.count}

@@ -4,7 +4,7 @@ class Website < ApplicationRecord
   broadcasts_refreshes
   after_update_commit -> { broadcast_refresh_later }
 
-  attr_reader :web_root
+  # attr_reader :web_root
 
   FileAsset = Struct.new(:assetid, :short_name, :filename, :url, :digest)
 
@@ -37,31 +37,27 @@ class Website < ApplicationRecord
   end
 
   def generate_archive(options)
-    p "!!! Website:generate_archive options #{options.inspect}"
-    FileUtils.remove_entry_secure(output_root_dir) if File.exist?(output_root_dir)
-    Asset.create_output_dirs(output_root_dir)
-    if options[:webroot].present?
-      @web_root = options[:webroot]
-    else
-      @web_root = "file://#{output_root_dir}"
+    Rails.logger.silence do
+      p "!!! Website:generate_archive options #{options.inspect}"
+      FileUtils.remove_entry_secure(output_root_dir) if File.exist?(output_root_dir)
+      Asset.create_output_dirs(output_root_dir)
+      if options[:assetid].present?
+        assetids = [assetid]
+      elsif options[:assetids].present?
+        assetids = options[:assetids].split(",").map(&:to_i)
+      else
+        assetids = nil
+      end
+      p "!!! Website:generate_archive assetids #{assetids.inspect}"
+      Browser.instance.with_root(output_root_dir) do
+        generate_readme
+        ContentAsset.generate(assetids: assetids)
+      end
+      PdfFileAsset.generate(output_root_dir)
+      ImageAsset.generate(output_root_dir)
+      MsExcelDocumentAsset.generate(output_root_dir)
+      MsWordDocumentAsset.generate(output_root_dir)
     end
-    if options[:assetid].present?
-      assetids = [assetid]
-    elsif options[:assetids].present?
-      assetids = options[:assetids].split(",").map(&:to_i)
-    else
-      assetids = nil
-    end
-    p "!!! Website:generate_archive assetids #{assetids.inspect}"
-    Browser.instance.with_root(output_root_dir) do
-      generate_readme
-      ContentAsset.generate(assetids: assetids)
-      generate_sitemap
-    end
-    PdfFileAsset.generate(output_root_dir)
-    # generate_assets("Image", @image_assets)
-    # generate_assets("PDF", @pdf_assets)
-    # generate_assets("Office", @office_assets)
   end
 
   def generate_readme
@@ -79,11 +75,13 @@ class Website < ApplicationRecord
     File.open(html_filename, "w") do |file|
       file.write("<html>\n#{html_head(title: "Sitemap")}\n<h1>Sitemap</h1>\n<ul class='w2p-toc-contents'>\n")
       document.css("#main-content > table > tr > td > table a").map do |link|
-        p "!!! generate_sitemap link #{link.inspect}"
+        # p "!!! generate_sitemap link #{link.inspect}"
         next if link.content.starts_with?("((")
         depth = link.css_path.scan(/table/).count - 2
-        url = canonical_url_for_url(link["href"])
-        file.write("<li style='padding-left:#{depth * 8}px'><a href='#{url}'>#{link.content}</li>\n")
+        asset = Asset.asset_for_uri(self, URI.parse(link["href"]))
+        raise "Website:generate_sitemap asset not found #{link["href"]}" if asset.nil?
+        p "!!! generate_sitemap assetid #{asset.assetid} url #{link["href"]}"
+        file.write("<li style='padding-left:#{depth * 8}px'><a href='#{asset.generated_filename}'>#{link.content}</li>\n")
       end
       file.write("</ul>\n</html>\n")
       file.close
@@ -211,7 +209,7 @@ class Website < ApplicationRecord
   def canonical_url_for_url(url)
     uri = normalize(url)
     return url if uri.host != host
-    p "!!! canonical_url_for_url #{url} uri #{uri}"
+    # p "!!! canonical_url_for_url #{url} uri #{uri}"
     # Some redirected links are direct to a PDF.
     return url if uri.path.match?(/.pdf$/i)
     asset = Asset.asset_for_uri(self, uri)

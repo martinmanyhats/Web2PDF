@@ -9,7 +9,7 @@ class Asset < ApplicationRecord
   SAFE_NAME_REPLACEMENT = "_".freeze
 
   HOME_SQUIZ_ASSETID = 93
-  SITEMAP_ASSETID = 15632
+  # SITEMAP_ASSETID = 15632
   PAGE_NOT_FOUND_SQUIZ_ASSETID = 13267
   DVD_README_ASSETID = 19273
 
@@ -21,7 +21,7 @@ class Asset < ApplicationRecord
     if uri.host != website.host ||
        uri.path.blank? ||
        !(uri.scheme == "http" || uri.scheme == "https") ||
-       uri.path.match?(%r{/(mainmenu|reports|sitemap|testing)})
+       uri.path.match?(%r{/(mainmenu|reports|testing)})
       p "!!! Asset:asset_for_uri skipping #{uri}"
       return nil
     end
@@ -29,7 +29,7 @@ class Asset < ApplicationRecord
   end
 
   def self.get_published_assets(website)
-    p "!!! get_published_assets"
+    p "!!! get_published_assets website #{website.inspect}"
     assets_regex = Regexp.new("tr class=\"squiz_asset\">#{"<td>([^<]*)</td>" * 5}")
     stream_lines_for_url("#{website.url}/reports/publishedassets").each do |line|
       if line =~ /tr class="squiz_asset"/
@@ -86,12 +86,6 @@ class Asset < ApplicationRecord
     url
   end
 
-  def XXcontent? = is_a?(ContentAsset)
-
-  def XXredirect? = is_a?(RedirectPageAsset)
-
-  def XXdata? = is_a?(DataAsset)
-
   def XXimage? = ["Image", "Thumbnail"].include? asset_type
 
   def XXpdf? = ["PDF File"].include? asset_type
@@ -104,7 +98,7 @@ class Asset < ApplicationRecord
 
   def self.home = Asset.find_sole_by(assetid: HOME_SQUIZ_ASSETID)
 
-  def sitemap? = assetid == SITEMAP_ASSETID
+  def XXsitemap? = assetid == SITEMAP_ASSETID
 
   def page_not_found_? = assetid == PAGE_NOT_FOUND_SQUIZ_ASSETID
 

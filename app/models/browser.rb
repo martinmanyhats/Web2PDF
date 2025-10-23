@@ -35,7 +35,6 @@ class Browser
       @browser = nil
       # @file_root = nil
     end
-    p "!!! with_root done"
   end
 
   private
