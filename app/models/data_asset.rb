@@ -59,7 +59,7 @@ class DataAsset < Asset
       end
       file.write("</table>\n</html>\n")
       file.close
-      Browser.instance.with_root(root_dir) { Browser.instance.html_to_pdf(toc_filename, "#{root_dir}/#{toc_basename}.pdf") }
+      Browser.instance.session(root_dir) { Browser.instance.html_to_pdf(toc_filename, "#{root_dir}/#{toc_basename}.pdf") }
     end
   end
 

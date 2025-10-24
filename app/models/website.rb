@@ -40,7 +40,7 @@ class Website < ApplicationRecord
     Rails.logger.silence do
       p "!!! Website:generate_archive options #{options.inspect}"
       FileUtils.remove_entry_secure(output_root_dir) if File.exist?(output_root_dir)
-      Asset.create_output_dirs(output_root_dir)
+      Asset.create_dirs(output_root_dir)
       if options[:assetid].present?
         assetids = [assetid]
       elsif options[:assetids].present?
@@ -49,7 +49,7 @@ class Website < ApplicationRecord
         assetids = nil
       end
       p "!!! Website:generate_archive assetids #{assetids.inspect}"
-      Browser.instance.with_root(output_root_dir) do
+      Browser.instance.session(output_root_dir) do
         generate_readme
         ContentAsset.generate(assetids: assetids)
       end
@@ -68,6 +68,7 @@ class Website < ApplicationRecord
     readme.generate(html_filename: html_filename, pdf_filename: pdf_filename)
   end
 
+=begin
   def generate_sitemap
     p "!!! Website:generate_sitemap"
     document = Nokogiri::HTML(URI.open("#{url}/sitemap"))
@@ -88,6 +89,7 @@ class Website < ApplicationRecord
       Browser.instance.html_to_pdf(html_filename, "#{output_root_dir}/sitemap.pdf", landscape: false)
     end
   end
+=end
 
   def internal?(url_or_uri)
     if url_or_uri.kind_of?(String)
@@ -194,8 +196,17 @@ class Website < ApplicationRecord
     )
   end
 
+  def zip_archive
+    dirs = Asset.output_dirs.join(" ")
+    zip_filename = "/tmp/dh-#{DateTime.now.strftime('%Y%m%d')}.zip"
+    File.delete(zip_filename)
+    system("cd #{output_root_dir} && zip -r #{zip_filename} *.pdf #{dirs}")
+    zip_filename
+  end
+
   # private
 
+=begin
   def spider_sitemap
     p "!!! Website::spider_sitemap"
     document = Nokogiri::HTML(URI.open("#{url}/sitemap"))
@@ -205,6 +216,7 @@ class Website < ApplicationRecord
       root_webpage.spider_link(link["href"])
     end
   end
+=end
 
   def canonical_url_for_url(url)
     uri = normalize(url)
@@ -223,6 +235,7 @@ class Website < ApplicationRecord
     end
   end
 
+=begin
   def get_squiz_pdf_list(options)
     p "!!! get_squiz_pdf_list otions #{options.inspect}"
     report = Nokogiri::HTML(URI.open("#{url}/reports/allpdfs"))
@@ -264,6 +277,7 @@ class Website < ApplicationRecord
     end
     pdfs_by_assetid
   end
+=end
 
   def notify_current_asset(asset, notice = "NONE")
     Turbo::StreamsChannel.broadcast_replace_to(

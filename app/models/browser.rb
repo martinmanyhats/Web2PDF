@@ -12,7 +12,6 @@ class Browser
     end
     page = browser.create_page
     page.go_to("file://#{html_filename}")
-    p "!!! current_title #{page.current_title }"
     browser.network.wait_for_idle(timeout: 60)
     page.pdf(
       path: pdf_filename,
@@ -23,13 +22,13 @@ class Browser
     browser.reset
   end
 
-  def with_root(file_root)
+  def session(file_root)
     # @file_root = file_root
     begin
       yield
     rescue => e
       puts e.backtrace
-      raise "Browser:with_root failed #{e.inspect}"
+      raise "Browser:session failed #{e.inspect}"
     ensure
       browser.quit
       @browser = nil

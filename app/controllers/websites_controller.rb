@@ -1,5 +1,5 @@
 class WebsitesController < ApplicationController
-  before_action :set_website, only: %i[ show edit update destroy spider generate_archive ]
+  before_action :set_website, only: %i[ show edit update destroy spider generate_archive zip_archive ]
 
   # GET /websites or /websites.json
   def index
@@ -77,6 +77,10 @@ class WebsitesController < ApplicationController
     options[:assetids] = params[:assetids].to_s if params[:assetids].present?
     options[:digest] = true if params[:digest].present?
     @website.generate_archive(options)
+  end
+
+  def zip_archive
+    @zip_filename = @website.zip_archive
   end
 
   private

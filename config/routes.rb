@@ -5,6 +5,7 @@ Rails.application.routes.draw do
     member do
       get "spider"
       get "generate_archive"
+      get "zip_archive"
     end
   end
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html

@@ -9,7 +9,6 @@ class Asset < ApplicationRecord
   SAFE_NAME_REPLACEMENT = "_".freeze
 
   HOME_SQUIZ_ASSETID = 93
-  # SITEMAP_ASSETID = 15632
   PAGE_NOT_FOUND_SQUIZ_ASSETID = 13267
   DVD_README_ASSETID = 19273
 
@@ -77,6 +76,10 @@ class Asset < ApplicationRecord
     "#{website.output_root_dir}/#{dir}/#{filename_base}.#{suffix}"
   end
 
+  def XXrelative_filename_with_assetid(dir, suffix)
+    "../#{dir}/#{filename_base}.#{suffix}"
+  end
+
   def assetid_formatted = ASSETID_FORMAT % assetid
 
   def url
@@ -86,19 +89,9 @@ class Asset < ApplicationRecord
     url
   end
 
-  def XXimage? = ["Image", "Thumbnail"].include? asset_type
-
-  def XXpdf? = ["PDF File"].include? asset_type
-
-  def XXoffice? = ["MS Excel Document", "MS Word Document"].include? asset_type
-
-  def XXattachment? = ["File", "MS Excel Document", "MS Word Document", "MP3 File", "Video File"].include? asset_type
-
   def home? = assetid == HOME_SQUIZ_ASSETID
 
   def self.home = Asset.find_sole_by(assetid: HOME_SQUIZ_ASSETID)
-
-  def XXsitemap? = assetid == SITEMAP_ASSETID
 
   def page_not_found_? = assetid == PAGE_NOT_FOUND_SQUIZ_ASSETID
 
@@ -134,16 +127,15 @@ class Asset < ApplicationRecord
     raise "Asset:redirect_url= unexpected redirect URL"
   end
 
-  def asset_path
-    ""
+  def self.create_dirs(root_dir)
+    dirs = output_dirs
+    dirs << "html"
+    dirs.each { FileUtils.mkdir_p("#{root_dir}/#{it}") }
   end
 
-  def self.create_output_dirs(root_dir)
+  def self.output_dirs
     Rails.application.eager_load! if Rails.env.development?
-    dirs = Asset.descendants.select { it.respond_to?(:output_dir) }.map { it.output_dir }.uniq
-    dirs << "html"
-    p "!!! dirs #{dirs.inspect}"
-    dirs.each { FileUtils.mkdir_p("#{root_dir}/#{it}") }
+    Asset.descendants.select { it.respond_to?(:output_dir) }.map { it.output_dir }.uniq
   end
 
   def update_html_link(node)

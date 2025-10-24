@@ -48,6 +48,7 @@ gem "nokogiri", "~> 1.18"
 gem "ferrum_pdf", "~> 3.0"
 gem 'libreconv'
 gem 'fast_excel'
+gem 'hexapdf'
 
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem

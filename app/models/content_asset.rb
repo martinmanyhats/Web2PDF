@@ -32,7 +32,7 @@ class ContentAsset < Asset
       file.close
       save!
       Browser.instance.html_to_pdf(html_filename, pdf_filename)
-      return
+      pdf_relative_links(pdf_filename)
     end
   end
 
@@ -111,15 +111,15 @@ class ContentAsset < Asset
     raise "ContentAsset:generate_asset_html_link url missing in assetid #{assetid}" if url.blank?
     link_assetid = link.attributes["data-w2p-assetid"]&.value
     raise "ContentAsset:generate_asset_html_link missing link_assetid in #{assetid} url #{url}" if link_assetid.nil?
-    p "!!! generate_asset_html_link assetid #{assetid} link_assetid #{link_assetid} url #{url}"
+    # p "!!! generate_asset_html_link assetid #{assetid} link_assetid #{link_assetid} url #{url}"
     linked_asset = Asset.find_by(assetid: link_assetid)
     # p "!!! linked_asset #{linked_asset.inspect}"
     case linked_asset
     when ContentAsset
       p "!!! generate_asset_html_link internally linking to content #{url} #{linked_asset.title}"
-      link["href"] = linked_asset.generated_filename
+      link["href"] = linked_asset.filename_base
     when DataAsset
-      data_url = linked_asset.generated_filename
+      data_url = "../#{linked_asset.output_dir}/#{linked_asset.filename_base}"
       p "!!! generate_asset_html_link internally linking #{url} to #{data_url}"
       link["href"] = data_url
     else
@@ -137,6 +137,27 @@ class ContentAsset < Asset
       p "!!! generate_external_links #{iframe["src"].inspect}"
       iframe.add_next_sibling("<p class='iframe-comment'>External URL: <a href='#{iframe["src"]}'>#{iframe["src"]}</a></p>")
     end
+  end
+
+  def pdf_relative_links(pdf_filename)
+    p "!!! pdf_relative_links #{pdf_filename}"
+    doc = HexaPDF::Document.open(pdf_filename)
+    file_prefix = "file://#{website.output_root_dir}/"
+    doc.pages.each do |page|
+      page[:Annots]&.each do |annot|
+        # p "!!! annot #{annot.inspect}"
+        next unless annot[:A]
+        uri = annot[:A][:URI]
+        next unless uri.start_with?(file_prefix)
+        depth = pdf_filename.count("/")
+        relative_prefix = depth > 3 ? "../" : "./"
+        annot[:A][:URI] = uri.sub(file_prefix, relative_prefix)
+        p "!!! pdf_relative_links depth #{depth} before #{uri} after #{annot[:A][:URI]}"
+      end
+    end
+    tmp_pdf_filename = "#{pdf_filename}-rel"
+    doc.write(tmp_pdf_filename, optimize: true)
+    FileUtils.mv(tmp_pdf_filename, pdf_filename)
   end
 
   def spiderable_link_elements(parsed_content)
