@@ -1,5 +1,4 @@
 Rails.application.routes.draw do
-  # resources :pdfs
   resources :users
   resources :websites do
     member do
