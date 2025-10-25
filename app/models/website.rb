@@ -49,14 +49,14 @@ class Website < ApplicationRecord
         assetids = nil
       end
       p "!!! Website:generate_archive assetids #{assetids.inspect}"
-      Browser.instance.session(output_root_dir) do
+      Browser.instance.session do
         generate_readme
         ContentAsset.generate(assetids: assetids)
       end
-      PdfFileAsset.generate(output_root_dir)
-      ImageAsset.generate(output_root_dir)
-      MsExcelDocumentAsset.generate(output_root_dir)
-      MsWordDocumentAsset.generate(output_root_dir)
+      PdfFileAsset.generate(self)
+      ImageAsset.generate(self)
+      MsExcelDocumentAsset.generate(self)
+      MsWordDocumentAsset.generate(self)
     end
   end
 
@@ -199,24 +199,12 @@ class Website < ApplicationRecord
   def zip_archive
     dirs = Asset.output_dirs.join(" ")
     zip_filename = "/tmp/dh-#{DateTime.now.strftime('%Y%m%d')}.zip"
-    File.delete(zip_filename)
+    File.delete(zip_filename) if File.exist?(zip_filename)
     system("cd #{output_root_dir} && zip -r #{zip_filename} *.pdf #{dirs}")
     zip_filename
   end
 
-  # private
-
-=begin
-  def spider_sitemap
-    p "!!! Website::spider_sitemap"
-    document = Nokogiri::HTML(URI.open("#{url}/sitemap"))
-    document.css("#main-content > table > tr > td > table a").map do |link|
-      p "!!! link #{link.inspect}"
-      next if link.content.starts_with?("((")
-      root_webpage.spider_link(link["href"])
-    end
-  end
-=end
+  private
 
   def canonical_url_for_url(url)
     uri = normalize(url)

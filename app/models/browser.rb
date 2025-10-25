@@ -22,8 +22,7 @@ class Browser
     browser.reset
   end
 
-  def session(file_root)
-    # @file_root = file_root
+  def session
     begin
       yield
     rescue => e
@@ -32,7 +31,6 @@ class Browser
     ensure
       browser.quit
       @browser = nil
-      # @file_root = nil
     end
   end
 

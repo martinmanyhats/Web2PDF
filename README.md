@@ -40,3 +40,11 @@ Code added to mysource_matrix/core/include/asset.inc:
                 }
                 return json_encode([$urls, $redirect_url], JSON_UNESCAPED_SLASHES);
         }
+
+INSTRUCTIONS
+
+* Clear Squiz cache
+* Restart Web2Pdf
+* http://127.0.0.1:3000/websites/1/spider
+* http://127.0.0.1:3000/websites/1/generate_archive
+* http://127.0.0.1:3000/websites/1/zip_archive

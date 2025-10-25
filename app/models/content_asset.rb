@@ -9,7 +9,10 @@ class ContentAsset < Asset
     else
       assets = ContentAsset.where(assetid: assetids)
     end
-    assets.each { it.generate }
+    assets.each do |asset|
+      pdf_filename = asset.generate
+      pdf_relative_links(asset.website, pdf_filename)
+    end
   end
 
   def generate(head: head, html_filename: nil, pdf_filename: nil)
@@ -26,14 +29,14 @@ class ContentAsset < Asset
       body.first_element_child.before(Nokogiri::XML::DocumentFragment.parse(header_html))
       generate_html_links(body)
       generate_external_links(body)
-      # generate_images(body)
+      # generate_images(body) # TODO larger images?
       file.write(body.to_html)
       file.write("</html>\n")
       file.close
       save!
       Browser.instance.html_to_pdf(html_filename, pdf_filename)
-      pdf_relative_links(pdf_filename)
     end
+    pdf_filename
   end
 
   def header_html
@@ -111,13 +114,12 @@ class ContentAsset < Asset
     raise "ContentAsset:generate_asset_html_link url missing in assetid #{assetid}" if url.blank?
     link_assetid = link.attributes["data-w2p-assetid"]&.value
     raise "ContentAsset:generate_asset_html_link missing link_assetid in #{assetid} url #{url}" if link_assetid.nil?
-    # p "!!! generate_asset_html_link assetid #{assetid} link_assetid #{link_assetid} url #{url}"
     linked_asset = Asset.find_by(assetid: link_assetid)
     # p "!!! linked_asset #{linked_asset.inspect}"
     case linked_asset
     when ContentAsset
       p "!!! generate_asset_html_link internally linking to content #{url} #{linked_asset.title}"
-      link["href"] = linked_asset.filename_base
+      link["href"] = "../page/#{linked_asset.filename_base}.pdf"
     when DataAsset
       data_url = "../#{linked_asset.output_dir}/#{linked_asset.filename_base}"
       p "!!! generate_asset_html_link internally linking #{url} to #{data_url}"
@@ -137,27 +139,6 @@ class ContentAsset < Asset
       p "!!! generate_external_links #{iframe["src"].inspect}"
       iframe.add_next_sibling("<p class='iframe-comment'>External URL: <a href='#{iframe["src"]}'>#{iframe["src"]}</a></p>")
     end
-  end
-
-  def pdf_relative_links(pdf_filename)
-    p "!!! pdf_relative_links #{pdf_filename}"
-    doc = HexaPDF::Document.open(pdf_filename)
-    file_prefix = "file://#{website.output_root_dir}/"
-    doc.pages.each do |page|
-      page[:Annots]&.each do |annot|
-        # p "!!! annot #{annot.inspect}"
-        next unless annot[:A]
-        uri = annot[:A][:URI]
-        next unless uri.start_with?(file_prefix)
-        depth = pdf_filename.count("/")
-        relative_prefix = depth > 3 ? "../" : "./"
-        annot[:A][:URI] = uri.sub(file_prefix, relative_prefix)
-        p "!!! pdf_relative_links depth #{depth} before #{uri} after #{annot[:A][:URI]}"
-      end
-    end
-    tmp_pdf_filename = "#{pdf_filename}-rel"
-    doc.write(tmp_pdf_filename, optimize: true)
-    FileUtils.mv(tmp_pdf_filename, pdf_filename)
   end
 
   def spiderable_link_elements(parsed_content)

@@ -83,6 +83,20 @@ class WebsitesController < ApplicationController
     @zip_filename = @website.zip_archive
   end
 
+  def experiment
+    html = <<HEREDOC
+<html><body>hello world!
+<a href="../page/014097-parish_archive_register.pdf" data-w2p-class="DolGoogleSheetViewerAsset" data-w2p-type="asset" data-w2p-assetid="14097">page</a>
+<a href="../pdf/016251-feoffees.pdf" data-w2p-class="PdfFileAsset" data-w2p-type="asset" data-w2p-assetid="16251">Feoffees</a>
+</body></html>
+HEREDOC
+    html_filename = "/tmp/dh/html/xx.html"
+    pdf_filename = "/tmp/dh/page/xx.pdf"
+    File.open(html_filename, "wb") { |f| f.write(html) }
+    Browser.instance.session { Browser.instance.html_to_pdf(html_filename, pdf_filename) }
+    Asset.pdf_relative_links(Website.find(1), pdf_filename)
+  end
+
   private
     # Use callbacks to share common setup or constraints between actions.
     def set_website
