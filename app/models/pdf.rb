@@ -9,6 +9,7 @@ class Pdf
     @combined = HexaPDF::Document.new
     contents = @combined.outline.add_item("Contents")
     page_number = 0
+    # Combine all pages, adding a PDF destination and contents entry for each.
     ContentAsset.publishable.order(:id).each do |asset|
       p "!!! assetid #{asset.assetid} short_name #{asset.short_name} filename #{asset.generated_filename}"
       pdf = HexaPDF::Document.open(asset.generated_filename)
@@ -22,12 +23,13 @@ class Pdf
     fixup_internal_content_links
 
     p "!!! writing @combined"
-    @combined.write("#{website.output_root_dir}/@combined.pdf", optimize: true)
+    @combined.write("#{website.output_root_dir}/combined.pdf", optimize: true)
   end
 
   def fixup_internal_content_links
     fixup_errors = []
-    @combined.pages.each do |page|
+    p "!!! pages size #{@combined.pages.size}"
+    @combined.pages.each_with_index  do |page, page_number|
       page.each_annotation do |annotation|
         if annotation.is_a?(HexaPDF::Type::Annotations::Link)
           next if annotation[:A].nil?
@@ -37,7 +39,7 @@ class Pdf
           matches = url.match(%r{\.\./(\w+)/0*(\d+)-})
           # raise "Pdf:fixup_internal_content_links unresolved DH url #{url}" if url.include?("www.deddingtonhistory.uk")
           if url.include?("__data") || url.include?("www.deddingtonhistory.uk")
-            fixup_errors << "unresolved url #{url}"
+            fixup_errors << "page #{page_number} unresolved url #{url}"
             next
           end
           p "!!! matches #{matches.inspect} url #{url}"
