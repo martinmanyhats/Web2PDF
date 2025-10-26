@@ -134,7 +134,6 @@ class Asset < ApplicationRecord
   end
 
   def self.output_dirs
-    Rails.application.eager_load! if Rails.env.development?
     Asset.descendants.select { it.respond_to?(:output_dir) }.map { it.output_dir }.uniq
   end
 

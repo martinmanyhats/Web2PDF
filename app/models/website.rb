@@ -58,6 +58,9 @@ class Website < ApplicationRecord
       MsExcelDocumentAsset.generate(self)
       MsWordDocumentAsset.generate(self)
     end
+    if options[:combine_pdf]
+      PDF.combine_pdfs
+    end
   end
 
   def generate_readme

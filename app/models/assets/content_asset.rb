@@ -25,6 +25,7 @@ class ContentAsset < Asset
     File.open(html_filename, "wb") do |file|
       file.write("<html>\n#{head}\n")
       body = Nokogiri::HTML("<div class='w2p-content'>#{content_html}</div>").css("body").first
+      body["id"] = "w2p-page-#{assetid_formatted}"
       body["data-w2p-assetid"] = assetid_formatted
       body.first_element_child.before(Nokogiri::XML::DocumentFragment.parse(header_html))
       generate_html_links(body)

@@ -76,6 +76,7 @@ class WebsitesController < ApplicationController
     options[:assetid] = params[:assetid].to_i if params[:assetid].present?
     options[:assetids] = params[:assetids].to_s if params[:assetids].present?
     options[:digest] = true if params[:digest].present?
+    options[:combine_pdf] = true if params[:combine_pdf].present?
     @website.generate_archive(options)
   end
 
@@ -84,10 +85,14 @@ class WebsitesController < ApplicationController
   end
 
   def experiment
+    Pdf.combine_pdfs(Website.find(1))
+    return
     html = <<HEREDOC
 <html><body>hello world!
 <a href="../page/014097-parish_archive_register.pdf" data-w2p-class="DolGoogleSheetViewerAsset" data-w2p-type="asset" data-w2p-assetid="14097">page</a>
 <a href="../pdf/016251-feoffees.pdf" data-w2p-class="PdfFileAsset" data-w2p-type="asset" data-w2p-assetid="16251">Feoffees</a>
+<img src="https://www.deddingtonhistory.uk/__data/assets/image/0016/1195/1906.jpg">
+<a href="../image/019063-Percy-Hobart.jpg">hobart</a>
 </body></html>
 HEREDOC
     html_filename = "/tmp/dh/html/xx.html"

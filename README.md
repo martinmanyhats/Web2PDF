@@ -2,11 +2,12 @@
 
 TODO
 
-- include PDFs from website
-- what to do with attached Word/Excel files
+~~- include PDFs from website~~
+~~- what to do with attached Word/Excel files~~
 - pages linked from footer
 - check https://www.deddingtonhistory.uk/buildings/windmillcentre
 - encoding for asset names
+- links in 014097-parish_archive_register.html
 
 Code added to mysource_matrix/core/include/asset.inc:
 
