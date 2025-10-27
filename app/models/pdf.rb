@@ -1,33 +1,44 @@
 # frozen_string_literal: true
 
 class Pdf
-  def self.combine_pdfs(website)
-    self.new.combine_pdfs(website)
+  def self.combine_pdfs(website, options = {})
+    self.new.combine_pdfs(website, options)
   end
 
-  def combine_pdfs(website)
+  def combine_pdfs(website, options)
     Rails.logger.silence do
       @combined = HexaPDF::Document.new
       contents_outline = @combined.outline.add_item("Contents")
-      pdfs_outline = @combined.outline.add_item("PDFs")
+      pdfs_outline = @combined.outline.add_item("PDFs") if options[:includeall]
       @combined.catalog[:PageMode] = :UseOutlines
+
+      if options[:assetids].present?
+        assetids = options[:assetids].split(",").map(&:to_i)
+        assets = ContentAsset.where(assetid: assetids)
+      else
+        assets = ContentAsset.publishable.order(:id)
+      end
       page_number = 0
 
       # Combine all pages, adding a PDF destination and contents entry for each.
-      ContentAsset.publishable.order(:id).each do |asset|
+      assets.each do |asset|
         next if asset.assetid == Asset::PARISH_ARCHIVE_ASSETID # It is a mess of bad links.
         page_number += append_asset(asset, page_number, contents_outline)
       end
       last_content_page_number = page_number
-      PdfFileAsset.publishable.order(:id).each do |asset|
-        page_number += append_asset(asset, page_number, pdfs_outline)
+      if options[:includeall]
+        PdfFileAsset.publishable.order(:id).each do |asset|
+          page_number += append_asset(asset, page_number, pdfs_outline)
+        end
       end
 
+      # Don't try to fixup non-content PDFS.
       fixup_internal_content_links(0..last_content_page_number-1)
     end
 
     p "!!! writing @combined"
     @combined.write("#{website.output_root_dir}/combined.pdf", optimize: true)
+    @combined
   end
 
   def append_asset(asset, page_number, outline)

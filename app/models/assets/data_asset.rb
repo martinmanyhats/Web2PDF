@@ -41,7 +41,7 @@ class DataAsset < Asset
     toc_basename = "toc-#{toc_name.downcase.gsub(/ /, "_")}"
     toc_filename = "#{website.output_root_dir}/html/#{toc_basename}.html"
     File.open(toc_filename, "w") do |file|
-      file.write("<html>\n#{website.html_head(title: toc_name)}\n<h1>Table of #{toc_name}</h1>")
+      file.write("<html>\n#{website.html_head(toc_name)}\n<h1>Table of #{toc_name}</h1>")
       file.write("<table class='w2p-toc'><thead><th>#{toc_name.singularize}</th><th>Referring pages</th></thead>\n")
       assets.sort_by { it.name.downcase }.each do |asset|
         references = asset.asset_urls.map do |asset_url|

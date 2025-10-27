@@ -41,9 +41,7 @@ class Website < ApplicationRecord
       p "!!! Website:generate_archive options #{options.inspect}"
       FileUtils.remove_entry_secure(output_root_dir) if File.exist?(output_root_dir)
       Asset.create_dirs(output_root_dir)
-      if options[:assetid].present?
-        assetids = [assetid]
-      elsif options[:assetids].present?
+      if options[:assetids].present?
         assetids = options[:assetids].split(",").map(&:to_i)
       else
         assetids = nil
@@ -55,8 +53,8 @@ class Website < ApplicationRecord
       end
       #PdfFileAsset.generate(self)
       #ImageAsset.generate(self)
-      MsExcelDocumentAsset.generate(self)
-      MsWordDocumentAsset.generate(self)
+      #MsExcelDocumentAsset.generate(self)
+      #MsWordDocumentAsset.generate(self)
     end
     if options[:combine_pdf]
       PDF.combine_pdfs
@@ -70,29 +68,6 @@ class Website < ApplicationRecord
     pdf_filename = "#{output_root_dir}/readme.pdf"
     readme.generate(html_filename: html_filename, pdf_filename: pdf_filename)
   end
-
-=begin
-  def generate_sitemap
-    p "!!! Website:generate_sitemap"
-    document = Nokogiri::HTML(URI.open("#{url}/sitemap"))
-    html_filename = "#{output_root_dir}/html/sitemap.html"
-    File.open(html_filename, "w") do |file|
-      file.write("<html>\n#{html_head(title: "Sitemap")}\n<h1>Sitemap</h1>\n<ul class='w2p-toc-contents'>\n")
-      document.css("#main-content > table > tr > td > table a").map do |link|
-        # p "!!! generate_sitemap link #{link.inspect}"
-        next if link.content.starts_with?("((")
-        depth = link.css_path.scan(/table/).count - 2
-        asset = Asset.asset_for_uri(self, URI.parse(link["href"]))
-        raise "Website:generate_sitemap asset not found #{link["href"]}" if asset.nil?
-        p "!!! generate_sitemap assetid #{asset.assetid} url #{link["href"]}"
-        file.write("<li style='padding-left:#{depth * 8}px'><a href='#{asset.generated_filename}'>#{link.content}</li>\n")
-      end
-      file.write("</ul>\n</html>\n")
-      file.close
-      Browser.instance.html_to_pdf(html_filename, "#{output_root_dir}/sitemap.pdf", landscape: false)
-    end
-  end
-=end
 
   def internal?(url_or_uri)
     if url_or_uri.kind_of?(String)
@@ -191,7 +166,7 @@ class Website < ApplicationRecord
     raise "Website:fetch_head_for_uri unexpected HTTP code #{response.code}"
   end
 
-  def html_head(title: nil)
+  def html_head(title)
     ApplicationController.renderer.render(
       template: "websites/website_head",
       locals: { website: self, title: title ? "#{title} - " : "" },

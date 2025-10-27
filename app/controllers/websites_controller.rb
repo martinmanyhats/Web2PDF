@@ -1,5 +1,5 @@
 class WebsitesController < ApplicationController
-  before_action :set_website, only: %i[ show edit update destroy spider generate_archive zip_archive ]
+  before_action :set_website, only: %i[ show edit update destroy spider generate_archive zip_archive combine_pdfs ]
 
   # GET /websites or /websites.json
   def index
@@ -73,7 +73,6 @@ class WebsitesController < ApplicationController
   def generate_archive
     options = {}
     options[:webroot] = params[:webroot] if params[:webroot].present?
-    options[:assetid] = params[:assetid].to_i if params[:assetid].present?
     options[:assetids] = params[:assetids].to_s if params[:assetids].present?
     options[:digest] = true if params[:digest].present?
     options[:combine_pdf] = true if params[:combine_pdf].present?
@@ -84,9 +83,13 @@ class WebsitesController < ApplicationController
     @zip_filename = @website.zip_archive
   end
 
+  def combine_pdfs
+    options = {}
+    options[:assetids] = params[:assetids].to_s if params[:assetids].present?
+    options[:includeall] = params[:webroot] if params[:includeall].present?
+    @combined = Pdf.combine_pdfs(Website.find(1), options)
+  end
   def experiment
-    Pdf.combine_pdfs(Website.find(1))
-    return
     html = <<HEREDOC
 <html><body>hello world!
 <a href="../page/014097-parish_archive_register.pdf" data-w2p-class="DolGoogleSheetViewerAsset" data-w2p-type="asset" data-w2p-assetid="14097">page</a>

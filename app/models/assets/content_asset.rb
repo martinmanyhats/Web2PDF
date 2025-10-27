@@ -16,12 +16,11 @@ class ContentAsset < Asset
   end
 
   def generate(head: head, html_filename: nil, pdf_filename: nil)
-    p "!!! ContentAsset:with_root assetid #{assetid} html_filename #{html_filename} pdf_filename #{pdf_filename}"
-    raise "ContentAsset:with_root unspidered assetid #{assetid}" if status == "unspidered"
-    head = website.html_head(title: short_name) if head.nil?
+    raise "ContentAsset:generate unspidered assetid #{assetid}" if status == "unspidered"
+    head = website.html_head(short_name) if head.nil?
     html_filename = filename_with_assetid("html", "html") if html_filename.nil?
     pdf_filename = filename_with_assetid(output_dir, "pdf") if pdf_filename.nil?
-    p "!!! ContentAsset:with_root assetid #{assetid} html_filename #{html_filename} pdf_filename #{pdf_filename}"
+    p "!!! ContentAsset:generate assetid #{assetid} html_filename #{html_filename} pdf_filename #{pdf_filename}"
     File.open(html_filename, "wb") do |file|
       file.write("<html>\n#{head}\n")
       body = Nokogiri::HTML("<div class='w2p-content'>#{content_html}</div>").css("body").first
@@ -42,7 +41,23 @@ class ContentAsset < Asset
 
   def header_html
     html_title = "<span class='w2p-title'>#{title}</span>"
-    html_breadcrumbs = "<span class='w2p-breadcrumbs'>#{breadcrumbs_html}</span>"
+    if asset.home?
+      html_breadcrumbs = ""
+    else
+      crumbs = ["<span class='w2p-breadcrumb'><a href='#{Asset.find_sole_by(assetid: Asset::HOME_SQUIZ_ASSETID).generated_filename}'>Home</a></span>"]
+      Nokogiri::HTML(breadcrumbs_html).css("a").each do |crumb|
+        linked_asset = Asset.asset_for_uri(website, URI.parse(crumb.attributes["href"].value))
+        raise "ContentAsset:header_html cannot find asset url #{crumb.attributes["href"].value}" if linked_asset.nil?
+        if linked_asset.is_a?(RedirectPageAsset)
+          p "!!! header_html redirection from #{linked_asset.assetid}"
+          linked_asset = Asset.asset_for_uri(website, URI.parse(linked_asset.redirect_url))
+          raise "ContentAsset:header_html cannot find redirect_url #{linked_asset.redirect_url}" if linked_asset.nil?
+        end
+        p "!!! found crumb linked_asset assetid #{linked_asset.assetid} #{linked_asset.short_name}"
+        crumbs << "<span class='w2p-breadcrumb'><a href='#{linked_asset.generated_filename}'>#{crumb.text.strip}</a></span>"
+      end
+      html_breadcrumbs = "<span class='w2p-breadcrumbs'>#{crumbs.join(" > ")}</span>"
+    end
     "<div class='w2p-header'>#{html_title}#{html_breadcrumbs}</div>"
   end
 
@@ -57,7 +72,8 @@ class ContentAsset < Asset
     main_content = document.css("#main-content")
     raise "Asset:extract_content_info missing main-content #{assetid}" if main_content.nil?
     self.content_html = main_content.inner_html
-    # TODO breadcrumbs if present
+    breadcrumbs = document.css("#breadcrumbs")
+    self.breadcrumbs_html = breadcrumbs unless breadcrumbs.nil?
   end
 
   def document
@@ -165,13 +181,5 @@ class ContentAsset < Asset
   def clean_url_from_link(node)
     # TODO remove anchor?
     node["href"].to_s.strip
-  end
-
-  def breadcrumbs_html
-    # p "!!! breadcrumbs_html #{squiz_breadcrumbs}"
-    crumbs = Nokogiri::HTML(squiz_breadcrumbs).css("a").map do |crumb|
-      "<span class='w2p-breadcrumb'><a href='#{crumb["href"]}'>#{crumb.text.strip}</a></span>"
-    end
-    crumbs.join("\n")
   end
 end

@@ -81,10 +81,6 @@ class Asset < ApplicationRecord
     "#{website.output_root_dir}/#{dir}/#{filename_base}.#{suffix}"
   end
 
-  def XXrelative_filename_with_assetid(dir, suffix)
-    "../#{dir}/#{filename_base}.#{suffix}"
-  end
-
   def assetid_formatted = ASSETID_FORMAT % assetid
 
   def url

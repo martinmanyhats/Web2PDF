@@ -11,9 +11,9 @@ class CreateAssets < ActiveRecord::Migration[8.0]
       t.string :canonical_url, index: true # TODO index needed?
       t.string :redirect_url
       t.string :content_html
+      t.string :breadcrumbs_html
       t.string :digest
       t.datetime :squiz_updated
-      t.string :squiz_breadcrumbs
 
       t.timestamps
     end

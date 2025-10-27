@@ -6,6 +6,7 @@ Rails.application.routes.draw do
       get "generate_archive"
       get "zip_archive"
       get "experiment"
+      get "combine_pdfs"
     end
   end
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
