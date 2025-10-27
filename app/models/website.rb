@@ -53,8 +53,8 @@ class Website < ApplicationRecord
         generate_readme
         ContentAsset.generate(assetids: assetids)
       end
-      PdfFileAsset.generate(self)
-      ImageAsset.generate(self)
+      #PdfFileAsset.generate(self)
+      #ImageAsset.generate(self)
       MsExcelDocumentAsset.generate(self)
       MsWordDocumentAsset.generate(self)
     end

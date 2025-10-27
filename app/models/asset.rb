@@ -11,6 +11,7 @@ class Asset < ApplicationRecord
   HOME_SQUIZ_ASSETID = 93
   PAGE_NOT_FOUND_SQUIZ_ASSETID = 13267
   DVD_README_ASSETID = 19273
+  PARISH_ARCHIVE_ASSETID = 14046
 
   def output_dir = self.class.output_dir
 
@@ -66,6 +67,10 @@ class Asset < ApplicationRecord
     else
       sname[0, 200]
     end
+  end
+
+  def clean_short_name
+    short_name.gsub("&amp;", "&")
   end
 
   def title
