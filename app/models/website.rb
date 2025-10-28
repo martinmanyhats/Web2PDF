@@ -51,10 +51,12 @@ class Website < ApplicationRecord
         generate_readme
         ContentAsset.generate(assetids: assetids)
       end
-      #PdfFileAsset.generate(self)
-      #ImageAsset.generate(self)
-      #MsExcelDocumentAsset.generate(self)
-      #MsWordDocumentAsset.generate(self)
+      unless options[:contentonly]
+        PdfFileAsset.generate(self)
+        ImageAsset.generate(self)
+        MsExcelDocumentAsset.generate(self)
+        MsWordDocumentAsset.generate(self)
+      end
     end
     if options[:combine_pdf]
       PDF.combine_pdfs

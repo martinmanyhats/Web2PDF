@@ -17,7 +17,7 @@ class Asset < ApplicationRecord
 
   def self.asset_for_uri(website, uri)
     return nil if uri.nil?
-    uri = website.normalize(uri)
+    uri = website.normalize(uri) # Will also convert String to URI.
     if uri.host != website.host ||
        uri.path.blank? ||
        !(uri.scheme == "http" || uri.scheme == "https") ||
@@ -92,7 +92,11 @@ class Asset < ApplicationRecord
 
   def home? = assetid == HOME_SQUIZ_ASSETID
 
+  def readme? = assetid == DVD_README_ASSETID
+
   def self.home = Asset.find_sole_by(assetid: HOME_SQUIZ_ASSETID)
+
+  def self.readme = Asset.find_sole_by(assetid: DVD_README_ASSETID)
 
   def page_not_found_? = assetid == PAGE_NOT_FOUND_SQUIZ_ASSETID
 

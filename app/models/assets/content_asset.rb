@@ -41,24 +41,30 @@ class ContentAsset < Asset
 
   def header_html
     html_title = "<span class='w2p-title'>#{title}</span>"
-    if asset.home?
-      html_breadcrumbs = ""
+    if home?
+      breadcrumb_assets = []
     else
-      crumbs = ["<span class='w2p-breadcrumb'><a href='#{Asset.find_sole_by(assetid: Asset::HOME_SQUIZ_ASSETID).generated_filename}'>Home</a></span>"]
-      Nokogiri::HTML(breadcrumbs_html).css("a").each do |crumb|
-        linked_asset = Asset.asset_for_uri(website, URI.parse(crumb.attributes["href"].value))
-        raise "ContentAsset:header_html cannot find asset url #{crumb.attributes["href"].value}" if linked_asset.nil?
+      breadcrumb_assets = Nokogiri::HTML(breadcrumbs_html).css("a").map do |crumb|
+        linked_asset = Asset.asset_for_uri(website, crumb.attributes["href"].value)  # XYZ
+        raise "ContentAsset:header_html cannot find asset url #{crumb.attributes["href"]}" if linked_asset.nil?
         if linked_asset.is_a?(RedirectPageAsset)
           p "!!! header_html redirection from #{linked_asset.assetid}"
-          linked_asset = Asset.asset_for_uri(website, URI.parse(linked_asset.redirect_url))
+          linked_asset = Asset.asset_for_uri(website, linked_asset.redirect_url)  # XYZ
           raise "ContentAsset:header_html cannot find redirect_url #{linked_asset.redirect_url}" if linked_asset.nil?
         end
-        p "!!! found crumb linked_asset assetid #{linked_asset.assetid} #{linked_asset.short_name}"
-        crumbs << "<span class='w2p-breadcrumb'><a href='#{linked_asset.generated_filename}'>#{crumb.text.strip}</a></span>"
+        linked_asset
       end
-      html_breadcrumbs = "<span class='w2p-breadcrumbs'>#{crumbs.join(" > ")}</span>"
+      if breadcrumb_assets.present?
+        breadcrumb_assets.prepend(Asset.home) unless breadcrumb_assets.first.home?
+      else
+        breadcrumb_assets = [Asset.home] unless readme?
+      end
     end
-    "<div class='w2p-header'>#{html_title}#{html_breadcrumbs}</div>"
+    crumbs = breadcrumb_assets.map do |linked_asset|
+      p "!!! found crumb linked_asset assetid #{linked_asset.assetid} #{linked_asset.short_name}"
+      "<span class='w2p-breadcrumb'><a href='#{linked_asset.generated_filename}'>#{linked_asset.short_name}</a></span>"
+    end
+    "<div class='w2p-header'>#{html_title}#{"<span class='w2p-breadcrumbs'>#{crumbs.join(" > ")}</span>"}</div>"
   end
 
   def extract_content_info

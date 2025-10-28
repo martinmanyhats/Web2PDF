@@ -74,8 +74,9 @@ class WebsitesController < ApplicationController
     options = {}
     options[:webroot] = params[:webroot] if params[:webroot].present?
     options[:assetids] = params[:assetids].to_s if params[:assetids].present?
+    options[:contentonly] = params[:assetids].to_s if params[:contentonly].present?
     options[:digest] = true if params[:digest].present?
-    options[:combine_pdf] = true if params[:combine_pdf].present?
+    # options['combine_pdf'] = true if params[:combine_pdf].present?
     @website.generate_archive(options)
   end
 
@@ -86,7 +87,7 @@ class WebsitesController < ApplicationController
   def combine_pdfs
     options = {}
     options[:assetids] = params[:assetids].to_s if params[:assetids].present?
-    options[:includeall] = params[:webroot] if params[:includeall].present?
+    options[:contentonly] = params[:webroot] if params[:contentonly].present?
     @combined = Pdf.combine_pdfs(Website.find(1), options)
   end
   def experiment

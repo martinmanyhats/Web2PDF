@@ -9,7 +9,7 @@ class Pdf
     Rails.logger.silence do
       @combined = HexaPDF::Document.new
       contents_outline = @combined.outline.add_item("Contents")
-      pdfs_outline = @combined.outline.add_item("PDFs") if options[:includeall]
+      pdfs_outline = @combined.outline.add_item("PDFs") unless options[:contentonly]
       @combined.catalog[:PageMode] = :UseOutlines
 
       if options[:assetids].present?
@@ -26,7 +26,7 @@ class Pdf
         page_number += append_asset(asset, page_number, contents_outline)
       end
       last_content_page_number = page_number
-      if options[:includeall]
+      unless options[:contentonly]
         PdfFileAsset.publishable.order(:id).each do |asset|
           page_number += append_asset(asset, page_number, pdfs_outline)
         end
@@ -41,7 +41,7 @@ class Pdf
     @combined
   end
 
-  def append_asset(asset, page_number, outline)
+  def append_asset(asset, page_number, outline = nil)
     p "!!! append_asset assetid #{asset.assetid} filename #{asset.generated_filename}"
     pdf = HexaPDF::Document.open(asset.generated_filename)
     pdf.pages.each do |page|
@@ -50,7 +50,7 @@ class Pdf
     end
     destination = [@combined.pages[page_number], :FitH, @combined.pages[page_number].box(:media).top]
     @combined.destinations.add(destination_name(asset), destination)
-    outline.add_item(asset.clean_short_name, destination: destination)
+    outline.add_item(asset.clean_short_name, destination: destination) if outline
     pdf.pages.count
   end
 
@@ -62,7 +62,7 @@ class Pdf
       page = @combined.pages[page_number]
       page.each_annotation do |annotation|
         if annotation.is_a?(HexaPDF::Type::Annotations::Link)
-          p "!!! page_number #{page_number} annotation #{annotation.inspect}"
+          # p "!!! page_number #{page_number} annotation #{annotation.inspect}"
           next if annotation[:A].nil?
           url = annotation[:A][:URI]
           raise "Pdf:fixup_internal_content_links annotation is missing URI" if url.nil?
@@ -72,7 +72,7 @@ class Pdf
             fixup_errors << "page #{page_number} unresolved url #{url}"
             next
           end
-          p "!!! matches #{matches.inspect} url #{url}"
+          # p "!!! matches #{matches.inspect} url #{url}"
           if matches
             linked_assetid = matches[2].to_i
             # p "!!! annotation url #{url} linked_assetid #{linked_assetid}"
@@ -84,7 +84,7 @@ class Pdf
               destinations = @combined.destinations[destination_name(linked_asset)]
               next if destinations.nil?
               # raise "Pdf:fixup_internal_content_links destination not found for linked_assetid #{linked_assetid}" if destinations.nil?
-              p "!!! found destinations for #{destination_name(linked_asset)} #{destinations.map{ it.class.name }}" if destinations
+              # p "!!! found destinations for #{destination_name(linked_asset)} #{destinations.map{ it.class.name }}" if destinations
               raise "Pdf:fixup_internal_content_links missing page destination #{linked_assetid} #{destination_name(linked_asset)}" unless destinations[0].is_a?(HexaPDF::Type::Page)
               annotation[:A] = { S: :GoTo, D: destinations }
               #elsif linked_asset.is_a?(DataAsset)
