@@ -43,6 +43,7 @@ class Pdf
       fixup_internal_content_links(0..last_content_page_number-1)
     end
 
+    @combined.catalog[:PageMode] = :UseOutlines
     p "!!! writing @combined"
     @combined.write("#{website.output_root_dir}/combined.pdf", optimize: true)
     @combined
@@ -53,6 +54,7 @@ class Pdf
     pdf = HexaPDF::Document.open(asset.generated_filename)
     if block_given?
       yield pdf
+      fixup_pdf(pdf)
       pdf.write(asset.generated_filename, optimize: true)
     end
     pdf.pages.each do |page|
@@ -106,10 +108,8 @@ class Pdf
   end
 
   def add_home_link(pdf)
-    p "!!! add_home_link"
     page = pdf.pages[0]
     canvas = page.canvas(type: :overlay)
-    p "!!! destination_name(Asset.home) #{destination_name(Asset.home)}"
 
     box_width = 32
     box_height = 12
@@ -117,6 +117,7 @@ class Pdf
     box_x = page.box.width - box_width - offset
     box_y = page.box.height - box_height - offset
     link_rect = [box_x, box_y, box_x + box_width, box_y + box_height]
+
     canvas.fill_color(237, 229, 211)
     canvas.rectangle(*link_rect).fill
     canvas.font("Helvetica", size: 11)
@@ -130,6 +131,24 @@ class Pdf
                    })
     page[:Annots] ||= []
     page[:Annots] << link
+  end
+
+  def fixup_pdf(pdf)
+    catalog = pdf.catalog
+    if catalog
+      # p "!!! fixup_pdf catalog[:ViewerPreferences] #{catalog[:ViewerPreferences].inspect}"
+      # p "!!! fixup_pdf catalog[:PageMode] #{catalog[:PageMode].inspect}"
+      if catalog[:ViewerPreferences]
+        if catalog[:ViewerPreferences][:NonFullScreenPageMode] == :None
+          p "!!! fixup_pdf NonFullScreenPageMode"
+          catalog[:ViewerPreferences][:NonFullScreenPageMode] = :UseNone
+        end
+      end
+      if catalog[:PageMode] == :None
+        p "!!! fixup_pdf PageMode"
+        catalog[:PageMode] = :UseNone
+      end
+    end
   end
 
   def destination_name(asset)

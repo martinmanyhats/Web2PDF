@@ -61,7 +61,6 @@ class ContentAsset < Asset
       end
     end
     crumbs = breadcrumb_assets.map do |linked_asset|
-      p "!!! found crumb linked_asset assetid #{linked_asset.assetid} #{linked_asset.short_name}"
       "<span class='w2p-breadcrumb'><a href='#{linked_asset.generated_filename}'>#{linked_asset.short_name}</a></span>"
     end
     "<div class='w2p-header'>#{html_title}#{"<span class='w2p-breadcrumbs'>#{crumbs.join(" > ")}</span>"}</div>"

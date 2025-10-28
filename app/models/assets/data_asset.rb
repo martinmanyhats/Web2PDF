@@ -6,11 +6,11 @@ class DataAsset < Asset
 
   def self.generate(website, assetids)
     if assetids.nil?
-      assets = DataAsset.publishable
+      assets = publishable
     else
-      assets = DataAsset.where(assetid: assetids)
+      assets = where(assetid: assetids)
     end
-    p "!!! DataAsset:generate for #{self.class.name} assets.count #{assets.count}"
+    p "!!! DataAsset:generate for #{self.name} assets.count #{assets.count}"
     assets.each { it.generate(website) }
     generate_toc(website, assets)
   end
