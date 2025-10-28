@@ -3,7 +3,7 @@
 class ContentAsset < Asset
   scope :publishable, -> { where(status: "spidered") }
 
-  def self.generate(assetids: nil)
+  def self.generate(assetids = nil)
     if assetids.nil?
       assets = ContentAsset.publishable
     else

@@ -76,7 +76,6 @@ class WebsitesController < ApplicationController
     options[:assetids] = params[:assetids].to_s if params[:assetids].present?
     options[:contentonly] = params[:assetids].to_s if params[:contentonly].present?
     options[:digest] = true if params[:digest].present?
-    # options['combine_pdf'] = true if params[:combine_pdf].present?
     @website.generate_archive(options)
   end
 

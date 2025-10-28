@@ -4,8 +4,12 @@ require 'open-uri'
 class DataAsset < Asset
   scope :publishable, -> { where(status: "linked") }
 
-  def self.generate(website)
-    assets = self.publishable
+  def self.generate(website, assetids)
+    if assetids.nil?
+      assets = DataAsset.publishable
+    else
+      assets = DataAsset.where(assetid: assetids)
+    end
     p "!!! DataAsset:generate for #{self.class.name} assets.count #{assets.count}"
     assets.each { it.generate(website) }
     generate_toc(website, assets)

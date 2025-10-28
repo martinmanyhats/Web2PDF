@@ -49,17 +49,14 @@ class Website < ApplicationRecord
       p "!!! Website:generate_archive assetids #{assetids.inspect}"
       Browser.instance.session do
         generate_readme
-        ContentAsset.generate(assetids: assetids)
+        ContentAsset.generate(assetids)
       end
       unless options[:contentonly]
-        PdfFileAsset.generate(self)
-        ImageAsset.generate(self)
-        MsExcelDocumentAsset.generate(self)
-        MsWordDocumentAsset.generate(self)
+        PdfFileAsset.generate(self, assetids)
+        ImageAsset.generate(self, assetids)
+        MsExcelDocumentAsset.generate(self, assetids)
+        MsWordDocumentAsset.generate(self, assetids)
       end
-    end
-    if options[:combine_pdf]
-      PDF.combine_pdfs
     end
   end
 

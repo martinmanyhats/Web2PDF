@@ -2,6 +2,7 @@
 
 class Pdf
   def self.combine_pdfs(website, options = {})
+    p "!!! Pdf.combine_pdfs otions #{options}"
     self.new.combine_pdfs(website, options)
   end
 
@@ -14,21 +15,27 @@ class Pdf
 
       if options[:assetids].present?
         assetids = options[:assetids].split(",").map(&:to_i)
-        assets = ContentAsset.where(assetid: assetids)
+        content_assets = ContentAsset.where(assetid: assetids)
+        pdf_assets = PdfFileAsset.where(assetid: assetids)
       else
-        assets = ContentAsset.publishable.order(:id)
+        content_assets = ContentAsset
+        pdf_assets = PdfFileAsset
       end
+      content_assets = content_assets.publishable.order(:id)
+      pdf_assets = pdf_assets.publishable.order(:id)
       page_number = 0
 
+      p "!!! Pdf:combine_pdfs content #{content_assets.count} pdf #{pdf_assets.count}"
       # Combine all pages, adding a PDF destination and contents entry for each.
-      assets.each do |asset|
+      content_assets.each do |asset|
+        p "!!! appending assetid #{asset.assetid}"
         next if asset.assetid == Asset::PARISH_ARCHIVE_ASSETID # It is a mess of bad links.
         page_number += append_asset(asset, page_number, contents_outline)
       end
       last_content_page_number = page_number
       unless options[:contentonly]
-        PdfFileAsset.publishable.order(:id).each do |asset|
-          page_number += append_asset(asset, page_number, pdfs_outline)
+        pdf_assets.each do |asset|
+          page_number += append_asset(asset, page_number, pdfs_outline) { |pdf| add_home_link(pdf) }
         end
       end
 
@@ -44,6 +51,10 @@ class Pdf
   def append_asset(asset, page_number, outline = nil)
     p "!!! append_asset assetid #{asset.assetid} filename #{asset.generated_filename}"
     pdf = HexaPDF::Document.open(asset.generated_filename)
+    if block_given?
+      yield pdf
+      pdf.write(asset.generated_filename, optimize: true)
+    end
     pdf.pages.each do |page|
       page.delete(:Thumb)
       @combined.pages << @combined.import(page)
@@ -79,18 +90,13 @@ class Pdf
             linked_asset = Asset.find_by(assetid: linked_assetid)
             raise "Pdf:fixup_internal_content_links cannot find linked_asset linked_assetid #{linked_assetid} url #{url}" if linked_asset.nil?
             p "!!! linked_asset linked_assetid #{linked_asset.assetid} #{linked_asset.short_name} page_number #{page_number}"
-            #if linked_asset.is_a?(ContentAsset)
-              # Replace internal link to linked_asset with PDF link to page destination.
-              destinations = @combined.destinations[destination_name(linked_asset)]
-              next if destinations.nil?
-              # raise "Pdf:fixup_internal_content_links destination not found for linked_assetid #{linked_assetid}" if destinations.nil?
-              # p "!!! found destinations for #{destination_name(linked_asset)} #{destinations.map{ it.class.name }}" if destinations
-              raise "Pdf:fixup_internal_content_links missing page destination #{linked_assetid} #{destination_name(linked_asset)}" unless destinations[0].is_a?(HexaPDF::Type::Page)
-              annotation[:A] = { S: :GoTo, D: destinations }
-              #elsif linked_asset.is_a?(DataAsset)
-              #annotation[:A][:URI] = url.delete_prefix("../")
-              #p "!!! DataAsset url #{url} annotation #{annotation.inspect}"
-            #end
+            # Replace internal link to linked_asset with PDF link to page destination.
+            destinations = @combined.destinations[destination_name(linked_asset)]
+            next if destinations.nil?
+            # raise "Pdf:fixup_internal_content_links destination not found for linked_assetid #{linked_assetid}" if destinations.nil?
+            # p "!!! found destinations for #{destination_name(linked_asset)} #{destinations.map{ it.class.name }}" if destinations
+            raise "Pdf:fixup_internal_content_links missing page destination #{linked_assetid} #{destination_name(linked_asset)}" unless destinations[0].is_a?(HexaPDF::Type::Page)
+            annotation[:A] = { S: :GoTo, D: destinations }
           end
           # TODO intra-page links to anchors
         end
@@ -99,10 +105,31 @@ class Pdf
     fixup_errors.each { puts(">>> #{it}") }
   end
 
-  def append_pdfs
-    PdfFileAsset.publishable.order(:id).each do |asset|
+  def add_home_link(pdf)
+    p "!!! add_home_link"
+    page = pdf.pages[0]
+    canvas = page.canvas(type: :overlay)
+    p "!!! destination_name(Asset.home) #{destination_name(Asset.home)}"
 
-    end
+    box_width = 32
+    box_height = 12
+    offset = 2
+    box_x = page.box.width - box_width - offset
+    box_y = page.box.height - box_height - offset
+    link_rect = [box_x, box_y, box_x + box_width, box_y + box_height]
+    canvas.fill_color(237, 229, 211)
+    canvas.rectangle(*link_rect).fill
+    canvas.font("Helvetica", size: 11)
+    canvas.fill_color(0, 134, 178)
+    canvas.text("Home", at: [box_x + offset, box_y + offset])
+    link = pdf.add({
+                     Type: :Annot,
+                     Subtype: :Link,
+                     Rect: link_rect,
+                     Dest: destination_name(Asset.home)
+                   })
+    page[:Annots] ||= []
+    page[:Annots] << link
   end
 
   def destination_name(asset)
