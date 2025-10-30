@@ -2,8 +2,8 @@ class Asset < ApplicationRecord
   belongs_to :website
   has_many :asset_urls
   has_many :links, dependent: :destroy, foreign_key: "source_id"
-  has_many :destinations, through: :links
-  has_many :sources, through: :links
+  #has_many :destinations, through: :links
+  #has_many :sources, through: :links
 
   ASSETID_FORMAT = "%06d".freeze
   SAFE_NAME_REPLACEMENT = "_".freeze
@@ -51,6 +51,10 @@ class Asset < ApplicationRecord
       end
     end
     p "!!! get_published_assets count #{Asset.count}"
+  end
+
+  def parents
+    Link.where(destination: self).map(&:source)
   end
 
   def safe_name

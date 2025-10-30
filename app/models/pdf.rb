@@ -121,14 +121,12 @@ class Pdf
   def add_home_link(pdf)
     page = pdf.pages[0]
     canvas = page.canvas(type: :overlay)
-
     box_width = 32
     box_height = 12
     offset = 2
     box_x = page.box.width - box_width - offset
     box_y = page.box.height - box_height - offset
     link_rect = [box_x, box_y, box_x + box_width, box_y + box_height]
-
     canvas.fill_color(237, 229, 211)
     canvas.rectangle(*link_rect).fill
     canvas.font("Helvetica", size: 11)

@@ -33,7 +33,7 @@ class DataAsset < Asset
 
   def filename_base
     raise "DataAsset:filename_base name missing" if name.nil?
-    "#{assetid_formatted}-#{name.present? ? "#{name}" : "untitled"}"
+    "#{assetid_formatted}-#{name}"
   end
 
   private
