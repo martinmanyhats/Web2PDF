@@ -49,6 +49,8 @@ gem "ferrum_pdf", "~> 3.0"
 gem 'libreconv'
 gem 'fast_excel'
 gem 'hexapdf'
+gem 'mini_magick'
+gem 'ruby-vips'
 
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem

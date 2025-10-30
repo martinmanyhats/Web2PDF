@@ -6,19 +6,18 @@ class DataAsset < Asset
 
   def self.generate(website, assetids)
     if assetids.nil?
-      assets = publishable
+      assets = publishable.order(:id)
     else
       assets = where(assetid: assetids)
     end
-    p "!!! DataAsset:generate for #{self.name} assets.count #{assets.count}"
+    p "!!! DataAsset:generate for #{self.name} assets.count #{assets.count} assets[0] #{assets[0].inspect}"
     assets.each { it.generate(website) }
     generate_toc(website, assets)
   end
 
   def generate(website)
-    # p "!!! DataAsset:generate assetid #{assetid}"
-    filename = filename_from_data_url
-    copy_filename = "#{website.output_root_dir}/#{output_dir}/#{assetid_formatted}-#{filename}"
+    "!!! DataAsset:generate assetid #{assetid}"
+    copy_filename = "#{website.output_root_dir}/#{output_dir}/#{assetid_formatted}-#{filename_from_data_url}"
     p "!!! DataAsset:generate url #{url} copy_filename #{copy_filename}"
     IO.copy_stream(URI.open("#{url}"), copy_filename)
   end

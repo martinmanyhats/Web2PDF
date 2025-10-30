@@ -63,7 +63,7 @@ class ContentAsset < Asset
     crumbs = breadcrumb_assets.map do |linked_asset|
       "<span class='w2p-breadcrumb'><a href='#{linked_asset.generated_filename}'>#{linked_asset.short_name}</a></span>"
     end
-    "<div class='w2p-header'>#{html_title}#{"<span class='w2p-breadcrumbs'>#{crumbs.join(" > ")}</span>"}</div>"
+    "<div class='w2p-header'>#{html_title} #{assetid}#{"<span class='w2p-breadcrumbs'>#{crumbs.join(" > ")}</span>"}</div>"
   end
 
   def extract_content_info

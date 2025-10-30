@@ -17,12 +17,18 @@ class Pdf
         assetids = options[:assetids].split(",").map(&:to_i)
         content_assets = ContentAsset.where(assetid: assetids)
         pdf_assets = PdfFileAsset.where(assetid: assetids)
+        image_assets = ImageAsset.where(assetid: assetids)
+        excel_assets = MsExcelDocumentAsset.where(assetid: assetids)
       else
         content_assets = ContentAsset
         pdf_assets = PdfFileAsset
+        image_assets = ImageAsset
+        excel_assets = MsExcelDocumentAsset
       end
       content_assets = content_assets.publishable.order(:id)
       pdf_assets = pdf_assets.publishable.order(:id)
+      image_assets = image_assets.publishable.order(:id)
+      excel_assets = excel_assets.publishable.order(:id)
       page_number = 0
 
       p "!!! Pdf:combine_pdfs content #{content_assets.count} pdf #{pdf_assets.count}"
@@ -33,8 +39,13 @@ class Pdf
         page_number += append_asset(asset, page_number, contents_outline)
       end
       last_content_page_number = page_number
+
       unless options[:contentonly]
-        pdf_assets.each do |asset|
+        assets = pdf_assets.to_a.concat(excel_assets.to_a)
+        assets.each do |asset|
+          page_number += append_asset(asset, page_number, pdfs_outline) { |pdf| add_home_link(pdf) }
+        end
+        image_assets.each do |asset|
           page_number += append_asset(asset, page_number, pdfs_outline) { |pdf| add_home_link(pdf) }
         end
       end
@@ -70,7 +81,7 @@ class Pdf
   def fixup_internal_content_links(page_number_range)
     p "!!! fixup_internal_content_links page_number_range #{page_number_range}"
     fixup_errors = []
-    p "!!! pages count #{@combined.pages.count}"
+    p "!!! fixup_internal_content_links pages count #{@combined.pages.count}"
     page_number_range.each do |page_number|
       page = @combined.pages[page_number]
       page.each_annotation do |annotation|
@@ -82,7 +93,7 @@ class Pdf
           matches = url.match(%r{\.\./(\w+)/0*(\d+)-})
           # raise "Pdf:fixup_internal_content_links unresolved DH url #{url}" if url.include?("www.deddingtonhistory.uk")
           if url.include?("__data") || url.include?("www.deddingtonhistory.uk")
-            fixup_errors << "page #{page_number} unresolved url #{url}"
+            fixup_errors << "#{page_number}: unresolved url #{url}"
             next
           end
           # p "!!! matches #{matches.inspect} url #{url}"
@@ -91,11 +102,11 @@ class Pdf
             # p "!!! annotation url #{url} linked_assetid #{linked_assetid}"
             linked_asset = Asset.find_by(assetid: linked_assetid)
             raise "Pdf:fixup_internal_content_links cannot find linked_asset linked_assetid #{linked_assetid} url #{url}" if linked_asset.nil?
-            p "!!! linked_asset linked_assetid #{linked_asset.assetid} #{linked_asset.short_name} page_number #{page_number}"
+            p "!!! fixup_internal_content_links #{page_number}: linked_assetid #{linked_asset.assetid} #{linked_asset.short_name}"
             # Replace internal link to linked_asset with PDF link to page destination.
             destinations = @combined.destinations[destination_name(linked_asset)]
+            fixup_errors << "#{page_number+1}: missing destinations linked assetid #{linked_asset.assetid} #{linked_asset.short_name}" unless destinations.present?
             next if destinations.nil?
-            # raise "Pdf:fixup_internal_content_links destination not found for linked_assetid #{linked_assetid}" if destinations.nil?
             # p "!!! found destinations for #{destination_name(linked_asset)} #{destinations.map{ it.class.name }}" if destinations
             raise "Pdf:fixup_internal_content_links missing page destination #{linked_assetid} #{destination_name(linked_asset)}" unless destinations[0].is_a?(HexaPDF::Type::Page)
             annotation[:A] = { S: :GoTo, D: destinations }
@@ -140,12 +151,12 @@ class Pdf
       # p "!!! fixup_pdf catalog[:PageMode] #{catalog[:PageMode].inspect}"
       if catalog[:ViewerPreferences]
         if catalog[:ViewerPreferences][:NonFullScreenPageMode] == :None
-          p "!!! fixup_pdf NonFullScreenPageMode"
+          # p "!!! fixup_pdf NonFullScreenPageMode"
           catalog[:ViewerPreferences][:NonFullScreenPageMode] = :UseNone
         end
       end
       if catalog[:PageMode] == :None
-        p "!!! fixup_pdf PageMode"
+        # p "!!! fixup_pdf PageMode"
         catalog[:PageMode] = :UseNone
       end
     end

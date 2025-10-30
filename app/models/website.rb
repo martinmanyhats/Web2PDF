@@ -200,50 +200,6 @@ class Website < ApplicationRecord
     end
   end
 
-=begin
-  def get_squiz_pdf_list(options)
-    p "!!! get_squiz_pdf_list otions #{options.inspect}"
-    report = Nokogiri::HTML(URI.open("#{url}/reports/allpdfs"))
-    pdfs = report.css("[id='allpdfs'] tr")
-    p "!!! get_squiz_pdf_list size #{pdfs.size}"
-    pdfs_by_assetid = {}
-    pdfs_by_digest = {}
-    pdfs.each do |pdf|
-      (assetid, short_name, filename, url) = pdf.css("td").map(&:text)
-      digest = nil
-      p "!!! get_squiz_pdf_list assetid #{assetid} filename #{filename}"
-      filename_duplicate = false
-      if pdfs_by_assetid.has_key?(assetid)
-        existing = pdfs_by_assetid[assetid]
-        p ">>> FILENAME assetids #{existing.assetid}:#{assetid} short names #{existing.short_name}:#{short_name} filename #{filename} "
-        existing.digest = get_digest(existing.url) unless existing.digest
-        digest = get_digest(url)
-        filename_duplicate = true
-        log(:pdf_duplicates, "FILENAME assetids #{existing.assetid}:#{assetid}   short names #{existing.short_name}:#{short_name}   filename #{filename}  #{digest != existing.digest ? "  CONTENTS DIFFER" : ""}")
-        data_asset = existing
-      else
-        data_asset = FileAsset.new(assetid: assetid.to_i, short_name: short_name, filename: filename, url: url, digest: digest)
-        pdfs_by_assetid[filename] = data_asset
-      end
-      if options.has_key?(:digest)
-        digest = get_digest(url) unless digest
-        if pdfs_by_digest.has_key?(digest) && !filename_duplicate
-          existing = pdfs_by_digest[digest]
-          p " >>> CONTENT url #{url} data_asset #{pdfs_by_digest[digest]}"
-          log(:pdf_duplicates, "CONTENT assetids #{existing.assetid}:#{assetid}   short names #{existing.short_name}:#{short_name}   filenames #{filename}:#{existing.filename}")
-        else
-          data_asset.digest = digest
-          pdfs_by_digest[digest] = data_asset
-        end
-      end
-    end
-    false && @pdf_uris.each do |uri|
-      raise "Website:get_squiz_pdf_list unknown filename #{filename}" unless @pdfs_by_filename.has_key?(File.basename(uri.to_s))
-    end
-    pdfs_by_assetid
-  end
-=end
-
   def notify_current_asset(asset, notice = "NONE")
     Turbo::StreamsChannel.broadcast_replace_to(
       "web2pdf",

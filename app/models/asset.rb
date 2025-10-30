@@ -201,42 +201,4 @@ class Asset < ApplicationRecord
       end
     end
   end
-
-  def self.asset_class_from_asset_type(asset_type)
-    # p "!!! asset_class_from_asset_type #{asset_type}"
-    "#{asset_type.titleize.gsub(" ", "")}Asset".constantize
-=begin
-    case asset_type
-    when "Standard Page"
-      asset_class = ContentAsset
-    when "Asset Listing Page"
-      asset_class = ContentAsset
-    when "DOL Google Sheet viewer"
-      asset_class = ContentAsset
-    when "DOL LargeImage"
-      asset_class = ContentAsset
-    when "File"
-      asset_class = DataAsset
-    when "Image"
-      asset_class = DataAsset
-    when "MS Excel Document"
-      asset_class = DataAsset
-    when "MS Word Document"
-      asset_class = DataAsset
-    when "PDF File"
-      asset_class = DataAsset
-    when "Redirect Page"
-      asset_class = RedirectPageAsset
-    when "Standard Page"
-      asset_class = ContentAsset
-    when "Thumbnail"
-      asset_class = DataAsset
-    when "Video File"
-      asset_class = DataAsset
-    else
-      raise "Website:get_published_assets unknown asset type #{asset_type}"
-    end
-    asset_class
-=end
-  end
 end
