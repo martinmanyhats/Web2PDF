@@ -15,6 +15,16 @@ class Asset < ApplicationRecord
 
   def output_dir = self.class.output_dir
 
+  def self.generate(website, assetids)
+    if assetids.nil?
+      assets = publishable
+    else
+      assets = where(assetid: assetids)
+    end
+    assets.each { it.generate }
+    assets
+  end
+
   def self.asset_for_uri(website, uri)
     return nil if uri.nil?
     uri = website.normalize(uri) # Will also convert String to URI.

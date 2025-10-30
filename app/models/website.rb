@@ -49,7 +49,7 @@ class Website < ApplicationRecord
       p "!!! Website:generate_archive assetids #{assetids.inspect}"
       Browser.instance.session do
         generate_readme
-        ContentAsset.generate(assetids)
+        ContentAsset.generate(self, assetids)
       end
       unless options[:contentonly]
         PdfFileAsset.generate(self, assetids)

@@ -3,7 +3,7 @@
 class ContentAsset < Asset
   scope :publishable, -> { where(status: "spidered") }
 
-  def self.generate(assetids = nil)
+  def self.XXgenerate(assetids = nil)
     if assetids.nil?
       assets = ContentAsset.publishable
     else
@@ -36,7 +36,7 @@ class ContentAsset < Asset
       save!
       Browser.instance.html_to_pdf(html_filename, pdf_filename)
     end
-    pdf_filename
+    Asset::pdf_relative_links(website, pdf_filename)
   end
 
   def header_html

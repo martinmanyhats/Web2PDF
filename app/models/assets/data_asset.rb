@@ -5,17 +5,11 @@ class DataAsset < Asset
   scope :publishable, -> { where(status: "linked") }
 
   def self.generate(website, assetids)
-    if assetids.nil?
-      assets = publishable.order(:id)
-    else
-      assets = where(assetid: assetids)
-    end
-    p "!!! DataAsset:generate for #{self.name} assets.count #{assets.count} assets[0] #{assets[0].inspect}"
-    assets.each { it.generate(website) }
+    assets = super
     generate_toc(website, assets)
   end
 
-  def generate(website)
+  def generate
     "!!! DataAsset:generate assetid #{assetid}"
     copy_filename = "#{website.output_root_dir}/#{output_dir}/#{assetid_formatted}-#{filename_from_data_url}"
     p "!!! DataAsset:generate url #{url} copy_filename #{copy_filename}"

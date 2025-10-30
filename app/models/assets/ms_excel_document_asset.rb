@@ -8,7 +8,7 @@ class MsExcelDocumentAsset < DataAsset
     super
   end
 
-  def generate(website)
+  def generate
     p "!!! MsExcelDocumentAsset:generate assetid #{assetid} #{generated_filename}"
     super
     xls_filename = "#{website.output_root_dir}/#{output_dir}/#{assetid_formatted}-#{filename_from_data_url}"

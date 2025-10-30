@@ -6,12 +6,8 @@ class ImageAsset < DataAsset
   def self.toc_name = "Images"
 
   def self.generate(website, assetids)
-    if assetids.nil?
-      assets = ImageAsset.publishable
-    else
-      assets = ImageAsset.where(assetid: assetids)
-    end
-    assets.each { it.generate }
+    assets = super
+    # TODO TOC
   end
 
   def generate
