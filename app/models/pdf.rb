@@ -34,20 +34,19 @@ class Pdf
       p "!!! Pdf:combine_pdfs content #{content_assets.count} pdf #{pdf_assets.count}"
       # Combine all pages, adding a PDF destination and contents entry for each.
       content_assets.each do |asset|
-        p "!!! appending assetid #{asset.assetid}"
         next if asset.assetid == Asset::PARISH_ARCHIVE_ASSETID # It is a mess of bad links.
         page_number += append_asset(asset, page_number, contents_outline)
       end
       last_content_page_number = page_number
 
       unless options[:contentonly]
-        assets = pdf_assets.to_a.concat(excel_assets.to_a)
+        assets = pdf_assets.to_a.concat(excel_assets.to_a).concat(image_assets.to_a)
         assets.each do |asset|
-          page_number += append_asset(asset, page_number, pdfs_outline) { |pdf| add_home_link(pdf) }
+          page_number += append_asset(asset, page_number, pdfs_outline) { |pdf| add_banner(pdf, asset) }
         end
-        image_assets.each do |asset|
-          page_number += append_asset(asset, page_number, pdfs_outline) { |pdf| add_home_link(pdf) }
-        end
+        #image_assets.each do |asset|
+        #  page_number += append_asset(asset, page_number, pdfs_outline) { |pdf| add_banner(pdf, asset) }
+        #end
       end
 
       # Don't try to fixup non-content PDFS.
@@ -118,18 +117,23 @@ class Pdf
     fixup_errors.each { puts(">>> #{it}") }
   end
 
-  def add_home_link(pdf)
+  def add_banner(pdf, asset = nil)
+    p "!!! add_banner assetid #{asset&.assetid}"
     page = pdf.pages[0]
     canvas = page.canvas(type: :overlay)
+    canvas.font("Helvetica", size: 11)
     box_width = 32
     box_height = 12
     offset = 2
     box_x = page.box.width - box_width - offset
     box_y = page.box.height - box_height - offset
+    if asset
+      canvas.fill_color(0, 0, 0)
+      canvas.text("#{asset.banner_title} ##{asset.assetid}", at: [offset, page.box.height - box_height])
+    end
     link_rect = [box_x, box_y, box_x + box_width, box_y + box_height]
     canvas.fill_color(237, 229, 211)
     canvas.rectangle(*link_rect).fill
-    canvas.font("Helvetica", size: 11)
     canvas.fill_color(0, 134, 178)
     canvas.text("Home", at: [box_x + offset, box_y + offset])
     link = pdf.add({

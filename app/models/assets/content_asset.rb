@@ -140,11 +140,11 @@ class ContentAsset < Asset
     # p "!!! linked_asset #{linked_asset.inspect}"
     case linked_asset
     when ContentAsset
-      p "!!! generate_asset_html_link internally linking to content #{url} #{linked_asset.title}"
+      # p "!!! generate_asset_html_link internally linking to content #{url} #{linked_asset.title}"
       link["href"] = "../page/#{linked_asset.filename_base}.pdf"
     when DataAsset
       data_url = "../#{linked_asset.output_dir}/#{linked_asset.filename_base}"
-      p "!!! generate_asset_html_link internally linking #{url} to #{data_url}"
+      # p "!!! generate_asset_html_link internally linking #{url} to #{data_url}"
       link["href"] = data_url
     else
       raise "ContentAsset:generate_asset_html_link unexpected class"

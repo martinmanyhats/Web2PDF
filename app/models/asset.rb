@@ -2,8 +2,6 @@ class Asset < ApplicationRecord
   belongs_to :website
   has_many :asset_urls
   has_many :links, dependent: :destroy, foreign_key: "source_id"
-  #has_many :destinations, through: :links
-  #has_many :sources, through: :links
 
   ASSETID_FORMAT = "%06d".freeze
   SAFE_NAME_REPLACEMENT = "_".freeze
@@ -86,6 +84,8 @@ class Asset < ApplicationRecord
   def clean_short_name
     short_name.gsub("&amp;", "&")
   end
+
+  def banner_title = clean_short_name
 
   def title
     name.present? ? name : short_name
@@ -177,14 +177,14 @@ class Asset < ApplicationRecord
       page[:Annots]&.each do |annot|
         next unless annot[:A]
         uri = annot[:A][:URI]
-        p "!!! uri #{uri}"
+        # p "!!! uri #{uri}"
         # next unless uri.start_with?(file_prefix)
         depth = pdf_filename.count("/")
         # relative_prefix = "file://#{depth > 3 ? "../" : "./"}"
         relative_prefix = "#{depth > 3 ? "../" : "./"}"
         #relative_prefix = "file://#{depth > 3 ? "../" : "./"}"
         annot[:A][:URI] = uri.sub(file_prefix, relative_prefix)
-        p "!!! pdf_relative_links depth #{depth} before #{uri} after #{annot[:A][:URI]}"
+        # p "!!! pdf_relative_links depth #{depth} before #{uri} after #{annot[:A][:URI]}"
       end
     end
     tmp_pdf_filename = "#{pdf_filename}-rel"
