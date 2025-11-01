@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Asset < ApplicationRecord
   belongs_to :website
   has_many :asset_urls
@@ -8,7 +10,7 @@ class Asset < ApplicationRecord
 
   HOME_SQUIZ_ASSETID = 93
   PAGE_NOT_FOUND_SQUIZ_ASSETID = 13267
-  DVD_README_ASSETID = 19273
+  README_ASSETID = 19273
   PARISH_ARCHIVE_ASSETID = 14046
 
   def output_dir = self.class.output_dir
@@ -61,6 +63,14 @@ class Asset < ApplicationRecord
     p "!!! get_published_assets count #{Asset.count}"
   end
 
+  def self.asset_class_from_asset_type(asset_type)
+    %w{PDF DOL MS}.each { asset_type = asset_type.sub(it, it.capitalize) }
+    klass_name = "#{asset_type.gsub(" ", "")}Asset"
+    klass = klass_name.constantize
+    raise "Asset:asset_class_from_asset_type no matching class #{asset_type}" if klass.nil?
+    klass
+  end
+
   def parents
     Link.where(destination: self).map(&:source)
   end
@@ -106,13 +116,15 @@ class Asset < ApplicationRecord
 
   def home? = assetid == HOME_SQUIZ_ASSETID
 
-  def readme? = assetid == DVD_README_ASSETID
+  def readme? = assetid == README_ASSETID
 
   def self.home = Asset.find_sole_by(assetid: HOME_SQUIZ_ASSETID)
 
-  def self.readme = Asset.find_sole_by(assetid: DVD_README_ASSETID)
+  def self.readme = Asset.find_sole_by(assetid: README_ASSETID)
 
   def page_not_found_? = assetid == PAGE_NOT_FOUND_SQUIZ_ASSETID
+
+  def add_footer? = false
 
   def create_asset_urls(value)
     url_info = JSON.parse(value)
@@ -201,7 +213,7 @@ class Asset < ApplicationRecord
       Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
         request = Net::HTTP::Get.new(uri)
         http.request(request) do |response|
-          buffer = ""
+          buffer = +""
           response.read_body do |chunk|
             buffer << chunk
             while (line = buffer.slice!(/.*?\n/)) # yield full lines

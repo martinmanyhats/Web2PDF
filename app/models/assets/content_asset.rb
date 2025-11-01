@@ -3,18 +3,6 @@
 class ContentAsset < Asset
   scope :publishable, -> { where(status: "spidered") }
 
-  def self.XXgenerate(assetids = nil)
-    if assetids.nil?
-      assets = ContentAsset.publishable
-    else
-      assets = ContentAsset.where(assetid: assetids)
-    end
-    assets.each do |asset|
-      pdf_filename = asset.generate
-      pdf_relative_links(asset.website, pdf_filename)
-    end
-  end
-
   def generate(head: head, html_filename: nil, pdf_filename: nil)
     raise "ContentAsset:generate unspidered assetid #{assetid}" if status == "unspidered"
     head = website.html_head(short_name) if head.nil?
@@ -63,7 +51,7 @@ class ContentAsset < Asset
     crumbs = breadcrumb_assets.map do |linked_asset|
       "<span class='w2p-breadcrumb'><a href='#{linked_asset.generated_filename}'>#{linked_asset.short_name}</a></span>"
     end
-    "<div class='w2p-header'>#{html_title} #{assetid}#{"<span class='w2p-breadcrumbs'>#{crumbs.join(" > ")}</span>"}</div>"
+    "<div class='w2p-header'>#{html_title}#{"<span class='w2p-breadcrumbs'>#{crumbs.join(" > ")}</span>"}</div>"
   end
 
   def extract_content_info
@@ -109,6 +97,8 @@ class ContentAsset < Asset
     raise "ContentAsset:filename_base name missing" if name.nil?
     "#{assetid_formatted}-#{name.present? ? "#{safe_name}" : "untitled"}"
   end
+
+  def add_footer? = true
 
   private
 

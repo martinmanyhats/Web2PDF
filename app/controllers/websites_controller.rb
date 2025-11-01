@@ -87,12 +87,12 @@ class WebsitesController < ApplicationController
     options = {}
     options[:assetids] = params[:assetids].to_s if params[:assetids].present?
     options[:contentonly] = params[:webroot] if params[:contentonly].present?
-    @combined = Pdf.combine_pdfs(Website.find(1), options)
+    @combined = Pdf.instance.combine_pdfs(Website.find(1), options)
   end
   def experiment
     html = <<HEREDOC
 <html><body>hello world!
-<a href="../page/014097-parish_archive_register.pdf" data-w2p-class="DolGoogleSheetViewerAsset" data-w2p-type="asset" data-w2p-assetid="14097">page</a>
+<a href="../page/014097-parish_archive_register.pdf" data-w2p-class="DolGoogleSheetviewerAsset" data-w2p-type="asset" data-w2p-assetid="14097">page</a>
 <a href="../pdf/016251-feoffees.pdf" data-w2p-class="PdfFileAsset" data-w2p-type="asset" data-w2p-assetid="16251">Feoffees</a>
 <img src="https://www.deddingtonhistory.uk/__data/assets/image/0016/1195/1906.jpg">
 <a href="../image/019063-Percy-Hobart.jpg">hobart</a>

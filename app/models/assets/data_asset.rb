@@ -14,6 +14,7 @@ class DataAsset < Asset
     copy_filename = "#{website.output_root_dir}/#{output_dir}/#{assetid_formatted}-#{filename_from_data_url}"
     p "!!! DataAsset:generate url #{url} copy_filename #{copy_filename}"
     IO.copy_stream(URI.open("#{url}"), copy_filename)
+    copy_filename
   end
 
   def update_html_link(node)

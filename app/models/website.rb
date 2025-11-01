@@ -1,10 +1,10 @@
+# frozen_string_literal: true
+
 class Website < ApplicationRecord
   has_many :assets, dependent: :destroy
 
   broadcasts_refreshes
   after_update_commit -> { broadcast_refresh_later }
-
-  # attr_reader :web_root
 
   FileAsset = Struct.new(:assetid, :short_name, :filename, :url, :digest)
 
@@ -19,9 +19,10 @@ class Website < ApplicationRecord
 
   def spider_content(options = {})
     p "!!! spider_content options #{options.inspect} #{inspect}"
-    home_asset = Asset.home
-    home_asset.status = "unspidered"
-    home_asset.save!
+    [Asset.readme, Asset.home].each do|asset|
+      asset.status = "unspidered"
+      asset.save!
+    end
 
     spider = Spider.new(self)
     loop do
@@ -48,7 +49,7 @@ class Website < ApplicationRecord
       end
       p "!!! Website:generate_archive assetids #{assetids.inspect}"
       Browser.instance.session do
-        generate_readme
+        ContentAsset.generate(self, [Asset.readme])
         ContentAsset.generate(self, assetids)
       end
       unless options[:contentonly]
@@ -60,8 +61,8 @@ class Website < ApplicationRecord
     end
   end
 
-  def generate_readme
-    readme = Asset.find_sole_by(assetid: Asset::DVD_README_ASSETID)
+  def XXgenerate_readme
+    readme = Asset.find_sole_by(assetid: Asset::README_ASSETID)
     readme.extract_content_info
     html_filename = "#{output_root_dir}/html/readme.html"
     pdf_filename = "#{output_root_dir}/readme.pdf"
