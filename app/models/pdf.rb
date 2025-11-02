@@ -135,17 +135,16 @@ class Pdf
   def add_home_button(pdf)
     page = pdf.pages[0]
     box_width = 32
-    box_height = 10
-    offset_x = offset_y = 2
-    box_x = page.box.width - box_width - offset_x
-    box_y = page.box.height - box_height - offset_y
+    box_height = 13
+    box_x = page.box.width - box_width
+    box_y = page.box.height - box_height
     link_rect = [box_x, box_y, box_x + box_width, box_y + box_height]
     canvas = page.canvas(type: :overlay)
     canvas.fill_color(button_background_color)
     canvas.rectangle(*link_rect).fill
     canvas.fill_color(*HOME_LINK_COLOUR)
     canvas.font("Helvetica", size: 10)
-    canvas.text("Home", at: [box_x + 2, box_y + offset_y])
+    canvas.text("Home", at: [box_x + 3, box_y + 3])
     link = pdf.add({
                      Type: :Annot,
                      Subtype: :Link,

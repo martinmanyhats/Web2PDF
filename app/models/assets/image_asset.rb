@@ -12,8 +12,7 @@ class ImageAsset < DataAsset
   end
 
   def generate
-    header_height = 20
-    baseline_offset = 8
+    header_height = 18
     image_pdf = HexaPDF::Document.new
     image_path = url
     p "!!! ImageAsset:generate filename #{image_path}"
