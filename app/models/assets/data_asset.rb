@@ -4,9 +4,9 @@ require 'open-uri'
 class DataAsset < Asset
   scope :publishable, -> { where(status: "linked") }
 
-  def self.generate(website, assetids)
-    assets = super
-    generate_toc(website, assets)
+  def self.generate(assets)
+    super
+    generate_toc(assets)
   end
 
   def generate
@@ -33,9 +33,10 @@ class DataAsset < Asset
 
   private
 
-  def self.generate_toc(website, assets)
+  def self.generate_toc(assets)
     p "!!! generate_toc #{toc_name} assets.count #{assets.count}"
     return if assets.empty?
+    website = assets.first.website
     toc_basename = "toc-#{toc_name.downcase.gsub(/ /, "_")}"
     toc_filename = "#{website.output_root_dir}/html/#{toc_basename}.html"
     File.open(toc_filename, "w") do |file|

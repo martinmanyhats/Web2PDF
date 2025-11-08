@@ -61,7 +61,7 @@ class Spider
         node["href"] = linked_asset.redirect_url
         return
       end
-      linked_asset = Asset.asset_for_uri(@website, linked_asset.redirect_url)  # XYZ URI.parse(linked_asset.redirect_url))
+      linked_asset = Asset.asset_for_uri(@website, linked_asset.redirect_url)
       raise "Spider:spider_link indirect missing asset uri #{uri}" if linked_asset.nil?
       if linked_asset.is_a?(RedirectPageAsset)
         unless @website.internal?(linked_asset.redirect_url)

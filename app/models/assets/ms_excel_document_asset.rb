@@ -4,10 +4,6 @@ class MsExcelDocumentAsset < DataAsset
   def self.output_dir = "file"
   def self.toc_name = "Excel files"
 
-  def self.generate(website, assetids)
-    super
-  end
-
   def generate
     p "!!! MsExcelDocumentAsset:generate assetid #{assetid} #{generated_filename}"
     super

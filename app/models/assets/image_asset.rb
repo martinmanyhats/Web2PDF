@@ -6,7 +6,7 @@ class ImageAsset < DataAsset
   def self.output_dir = "image"
   def self.toc_name = "Images"
 
-  def self.generate(website, assetids)
+  def self.XXgenerate(website, assetids)
     assets = super
     # TODO TOC
   end

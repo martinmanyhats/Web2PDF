@@ -3,6 +3,16 @@
 class ContentAsset < Asset
   scope :publishable, -> { where(status: "spidered") }
 
+  def self.sitemap_ordered
+    assets = ContentAsset.sitemap.spiderable_link_elements(Nokogiri::HTML(Asset.sitemap.content_html)).map do |link|
+      assetid = link["data-w2p-assetid"]
+      next if assetid.nil?
+      ContentAsset.find_by(assetid: assetid) # Which is nil for non-content links eg PDF.
+    end.compact
+    p "!!! sitemap_ordered size #{assets.size}"
+    assets
+  end
+
   def generate(head: head, html_filename: nil, pdf_filename: nil)
     raise "ContentAsset:generate unspidered assetid #{assetid}" if status == "unspidered"
     head = website.html_head(short_name) if head.nil?
@@ -87,6 +97,81 @@ class ContentAsset < Asset
     super
   end
 
+  def sort_order
+    sitemap_links = spiderable_link_elements(Nokogiri::HTML(Asset.sitemap.content_html))
+    @sitemap_asset_depth_by_assetid = {}
+    sitemap_links.each do |link|
+      depth = sitemap_depth(link)
+      assetid = link["data-w2p-assetid"]
+      #p "!!! depth #{depth} assetid #{assetid}"
+      @sitemap_asset_depth_by_assetid[assetid] = depth
+    end
+    p "!!! sitemap_asset_depth_by_assetid.size #{@sitemap_asset_depth_by_assetid.size}"
+    sitemap_assetids = @sitemap_asset_depth_by_assetid.keys
+    non_sitemap_content_assetids = ContentAsset.where(status: "scraped").pluck(:assetid) - sitemap_assetids
+    raise "ContentAsset:sort_order non_sitemap_content_assetids #{non_sitemap_content_assetids.join(" ")}" unless non_sitemap_content_assetids.empty?
+
+=begin
+    p "!!! non_sitemap_content_assetids #{non_sitemap_content_assetids.size}"
+    non_sitemap_content_assetids.first(5).each do |assetid|
+      asset = Asset.find_sole_by(assetid: assetid)
+      p "!!! assetid #{assetid} short_name #{asset.short_name}"
+      parent_sitemap_asset = find_parent_in_sitemap(asset)
+      p "!!! parent_sitemap_asset #{parent_sitemap_asset.assetid} #{parent_sitemap_asset.short_name}"
+    end
+
+    sitemap_assets = sitemap_links.map do |link|
+      Rails.logger.silence do
+        linked_asset = Asset.asset_for_uri(website, link.attributes["href"].value)
+        linked_asset.is_a?(ContentAsset) ? linked_asset : nil
+      end
+    end.compact
+    p "!!! sort_order sitemap_assets #{sitemap_assets.size}"
+    ordered_assets = SortedSet.new
+    sitemap_depth_by_assetid = {}
+    sitemap_assets.each do |asset|
+      sitemap_depth = asset.sitemap_depth
+      if ordered_assets.include?(asset)
+        # See if we now have a lower depth in the sitemap.
+      else ordered_assets.include?(asset) && x
+        ordered_assets << asset
+      asset.best_sitemap_depth = 42
+      end
+      if better_match(ordered_assets)
+      end
+    end
+=end
+  end
+
+  def XXfind_parent_in_sitemap(asset)
+    best_depth = 999
+    found_parent = nil
+    parent_assets = Set.new(asset.parents)
+    parent_assets.each do |parent|
+      if @sitemap_asset_depth_by_assetid.has_key?(parent.assetid) && @sitemap_asset_depth_by_assetid[parent.assetid] < best_depth
+        found_parent = parent
+        best_depth = @sitemap_asset_depth_by_assetid[parent.assetid]
+      end
+    end
+    raise "ContentAsset:find_parent_in_sitemap parent not found for assetid #{asset.assetid}" if found_parent.nil?
+    found_parent
+  end
+
+  def sitemap_depth(link)
+    link.ancestors("tr").size - 2
+  end
+
+  def sort_order2(links_visited = Set.new)
+    links = Link.where(source: self)
+    children = links.select { it.destination.is_a?(ContentAsset) && !links_visited.include?(it) }.first(3).map do |link|
+      p "!!! link.destination assetid #{link.destination.assetid}"
+      links_visited << link
+      [link.destination, link.destination.sort_order(links_visited)]
+    end
+    pp children
+    children
+  end
+
   def generated_filename
     raise "generated_filename website nil" if website.nil?
     raise "generated_filename website.output_root_dir nil" if website.output_root_dir.nil?
@@ -99,6 +184,13 @@ class ContentAsset < Asset
   end
 
   def add_footer? = true
+
+  def spiderable_link_elements(parsed_content)
+    # Skip anchors and links with same page.
+    parsed_content.css("a[href]")
+                  .select { |a| !a["href"].start_with?("#") }
+                  .compact
+  end
 
   private
 
@@ -151,13 +243,6 @@ class ContentAsset < Asset
       p "!!! generate_external_links #{iframe["src"].inspect}"
       iframe.add_next_sibling("<p class='iframe-comment'>External URL: <a href='#{iframe["src"]}'>#{iframe["src"]}</a></p>")
     end
-  end
-
-  def spiderable_link_elements(parsed_content)
-    # Skip anchors and links with same page.
-    parsed_content.css("a[href]")
-                  .select { |a| !a["href"].start_with?("#") }
-                  .compact
   end
 
   def spiderable_images(parsed_content)

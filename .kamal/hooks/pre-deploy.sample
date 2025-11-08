@@ -4,7 +4,7 @@
 #
 # Checks the Github status of the build, waiting for a pending build to complete for up to 720 seconds.
 #
-# Fails unless the combined status is "success"
+# Fails unless the combined_pdf status is "success"
 #
 # These environment variables are available:
 # KAMAL_RECORDED_AT

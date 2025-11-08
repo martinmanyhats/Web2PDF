@@ -19,7 +19,7 @@ class Website < ApplicationRecord
 
   def spider_content(options = {})
     p "!!! spider_content options #{options.inspect} #{inspect}"
-    [Asset.readme, Asset.home].each do|asset|
+    false && [Asset.readme, Asset.home].each do|asset|
       asset.status = "unspidered"
       asset.save!
     end
@@ -34,6 +34,8 @@ class Website < ApplicationRecord
         spider.spider_asset(asset)
       end
     end
+    # Now do readme and home.
+    [Asset.readme, Asset.home].each { spider.spider_asset(it) }
     notify_current_asset(nil, "spider complete")
   end
 
@@ -44,29 +46,26 @@ class Website < ApplicationRecord
       Asset.create_dirs(output_root_dir)
       if options[:assetids].present?
         assetids = options[:assetids].split(",").map(&:to_i)
+        content_assets = ContentAsset.where(assetid: assetids).order(:id)
+        pdf_file_assets = PdfFileAsset.where(assetid: assetids).order(:id)
+        image_assets = ImageAsset.where(assetid: assetids).order(:id)
+        excel_assets = MsExcelDocumentAsset.where(assetid: assetids).order(:id)
       else
-        assetids = nil
+        content_assets = ContentAsset.sitemap_ordered.push(Asset.readme)
+        pdf_file_assets = PdfFileAsset.publishable
+        image_assets = ImageAsset.publishable
+        excel_assets = MsExcelDocumentAsset.publishable
       end
-      p "!!! Website:generate_archive assetids #{assetids.inspect}"
       Browser.instance.session do
-        ContentAsset.generate(self, [Asset.readme])
-        ContentAsset.generate(self, assetids)
+        ContentAsset.generate(content_assets)
       end
       unless options[:contentonly]
-        PdfFileAsset.generate(self, assetids)
-        ImageAsset.generate(self, assetids)
-        MsExcelDocumentAsset.generate(self, assetids)
-        MsWordDocumentAsset.generate(self, assetids)
+        PdfFileAsset.generate(pdf_file_assets)
+        ImageAsset.generate(image_assets)
+        MsExcelDocumentAsset.generate(excel_assets)
+        # MsWordDocumentAsset.generate(word_assets)
       end
     end
-  end
-
-  def XXgenerate_readme
-    readme = Asset.find_sole_by(assetid: Asset::README_ASSETID)
-    readme.extract_content_info
-    html_filename = "#{output_root_dir}/html/readme.html"
-    pdf_filename = "#{output_root_dir}/readme.pdf"
-    readme.generate(html_filename: html_filename, pdf_filename: pdf_filename)
   end
 
   def internal?(url_or_uri)

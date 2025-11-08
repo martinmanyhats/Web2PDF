@@ -8,21 +8,16 @@ class Asset < ApplicationRecord
   ASSETID_FORMAT = "%06d".freeze
   SAFE_NAME_REPLACEMENT = "_".freeze
 
-  HOME_SQUIZ_ASSETID = 93
-  PAGE_NOT_FOUND_SQUIZ_ASSETID = 13267
+  HOME_ASSETID = 93
+  SITEMAP_ASSETID = 15632
+  PAGE_NOT_FOUND_ASSETID = 13267
   README_ASSETID = 19273
   PARISH_ARCHIVE_ASSETID = 14046
 
   def output_dir = self.class.output_dir
 
-  def self.generate(website, assetids)
-    if assetids.nil?
-      assets = publishable
-    else
-      assets = where(assetid: assetids)
-    end
+  def self.generate(assets)
     assets.each { it.generate }
-    assets
   end
 
   def self.asset_for_uri(website, uri)
@@ -114,15 +109,16 @@ class Asset < ApplicationRecord
     url
   end
 
-  def home? = assetid == HOME_SQUIZ_ASSETID
-
-  def readme? = assetid == README_ASSETID
-
-  def self.home = Asset.find_sole_by(assetid: HOME_SQUIZ_ASSETID)
-
-  def self.readme = Asset.find_sole_by(assetid: README_ASSETID)
-
-  def page_not_found_? = assetid == PAGE_NOT_FOUND_SQUIZ_ASSETID
+  %w{home readme sitemap page_not_found}.each do |name|
+    define_singleton_method name.to_sym do
+      # p "!!! #{name} const #{Asset.const_get("#{name.upcase}_ASSETID")}"
+      Asset.find_by(assetid: Asset.const_get("#{name.upcase}_ASSETID"))
+    end
+    define_method "#{name}?".to_sym do
+      # p "!!! #{name}? assetid #{assetid} const #{Asset.const_get("#{name.upcase}_ASSETID")}"
+      assetid == Asset.const_get("#{name.upcase}_ASSETID")
+    end
+  end
 
   def add_footer? = false
 

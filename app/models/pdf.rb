@@ -10,11 +10,9 @@ class Pdf
   def combine_pdfs(website, options)
     p "!!! Pdf:combine_pdfs otions #{options}"
     Rails.logger.silence do
-      @combined = HexaPDF::Document.new
-      @combined.fonts.add("Symbol")
-      contents_outline = @combined.outline.add_item("Contents")
-      pdfs_outline = @combined.outline.add_item("PDFs") unless options[:contentonly]
-      @combined.catalog[:PageMode] = :UseOutlines
+      @combined_pdf = HexaPDF::Document.new
+      @combined_pdf.fonts.add("Symbol")
+      @combined_pdf.catalog[:PageMode] = :UseOutlines
 
       if options[:assetids].present?
         assetids = options[:assetids].split(",").map(&:to_i)
@@ -28,10 +26,12 @@ class Pdf
         image_assets = ImageAsset
         excel_assets = MsExcelDocumentAsset
       end
-      content_assets = content_assets.publishable.order(:id)
+
+      content_assets = content_assets.sitemap_ordered
       pdf_assets = pdf_assets.publishable.order(:id)
       image_assets = image_assets.publishable.order(:id)
       excel_assets = excel_assets.publishable.order(:id)
+      contents_outline = @combined_pdf.outline.add_item("Contents")
       @page_number = 0
 
       p "!!! Pdf:combine_pdfs content #{content_assets.count} pdf #{pdf_assets.count}"
@@ -39,27 +39,38 @@ class Pdf
       @current_asset = Asset.readme
       @page_number = append_asset(@current_asset, @page_number)
       content_assets.each do |asset|
+        raise "Pdf:combine_pdfs not ContentAsset #{asset.assetid}" unless asset.is_a?(ContentAsset)
+        raise "Pdf:combine_pdfs WTF #{asset.assetid}" if asset.assetid == 18164 || asset.assetid == 18132
         @current_asset = asset
         next if asset.assetid == Asset::PARISH_ARCHIVE_ASSETID # It is a mess of bad links.
         @page_number += append_asset(asset, @page_number, contents_outline)
       end
       last_content_page_number = @page_number
+      p "!!! last_content_page_number #{last_content_page_number}"
 
       unless options[:contentonly]
-        assets = pdf_assets.to_a.concat(excel_assets.to_a).concat(image_assets.to_a)
-        assets.each do |asset|
-          @page_number += append_asset(asset, @page_number, pdfs_outline) { |pdf| add_banner(pdf, asset) }
+        data_assets = {
+          "PDFs": pdf_assets,
+          "Images": image_assets,
+          "Excel files": excel_assets
+        }
+        data_assets.each_pair do |name, assets|
+          outline = @combined_pdf.outline.add_item(name)
+          assets.all.each do |asset|
+            @page_number += append_asset(asset, @page_number, outline) { |pdf| add_banner(pdf, asset) }
+          end
         end
       end
+      set_initial_view
 
-      # Don't try to fixup non-content PDFS.
+      # Don't try to fixup non-content PDFs.
       fixup_internal_content_links(0..last_content_page_number-1)
     end
 
-    @combined.catalog[:PageMode] = :UseOutlines
-    p "!!! writing @combined"
-    @combined.write("#{website.output_root_dir}/combined.pdf", optimize: true)
-    @combined
+    @combined_pdf.catalog[:PageMode] = :UseOutlines
+    p "!!! writing @combined_pdf"
+    @combined_pdf.write("#{website.output_root_dir}/combined_pdf.pdf", optimize: true)
+    @combined_pdf
   end
 
   def append_asset(asset, page_number, outline = nil)
@@ -71,31 +82,48 @@ class Pdf
     end
     pdf.pages.each do |page|
       page.delete(:Thumb)
-      @combined.pages << @combined.import(page)
+      @combined_pdf.pages << @combined_pdf.import(page)
       if asset.add_footer?
-        draw_footer(@combined.pages[-1], asset)
+        draw_footer(@combined_pdf.pages[-1], asset)
       end
     end
-    destination = [@combined.pages[page_number], :FitH, @combined.pages[page_number].box(:media).top]
-    @combined.destinations.add(destination_name(asset), destination)
+    destination = [@combined_pdf.pages[page_number], :FitH, @combined_pdf.pages[page_number].box(:media).top]
+    @combined_pdf.destinations.add(destination_name(asset), destination)
     outline.add_item(asset.clean_short_name, destination: destination) if outline
-    p "!!! checking for add_footer class #{asset.class.name}"
+    # p "!!! checking for add_footer class #{asset.class.name}"
     pdf.pages.count
+  end
+
+  def set_initial_view
+    # Sadly most browsers will ignore.
+    @combined_pdf.catalog[:ViewerPreferences] ||= {}
+    @combined_pdf.catalog[:ViewerPreferences][:FitWindow] = true
+    prefs = @combined_pdf.catalog[:ViewerPreferences]
+    p "!!! Pdf:set_initial_view catalog #{prefs.each.map{ "#{it}=#{prefs[it]} "} }"
   end
 
   def fixup_internal_content_links(page_number_range)
     p "!!! fixup_internal_content_links page_number_range #{page_number_range}"
     fixup_errors = []
-    p "!!! fixup_internal_content_links pages count #{@combined.pages.count}"
+    p "!!! fixup_internal_content_links pages count #{@combined_pdf.pages.count}"
     page_number_range.each do |page_number|
-      page = @combined.pages[page_number]
-      page.each_annotation do |annotation|
+      print "\r!!! page_number #{page_number}" if (page_number % 20) == 0
+      p "!!! page_number #{page_number}" if page_number > 1366
+      page = @combined_pdf.pages[page_number]
+      if page_number > 1366
+        p "!!! page #{page.class.name}"
+        # p "!!! page #{page.inspect.truncate(200)}"
+        # p "!!! page.each_annotation.size #{page.each_annotation.size}"
+      end
+      page.each_annotation.select { it[:Subtype] == :Link }.each do |annotation|
         if annotation.is_a?(HexaPDF::Type::Annotations::Link)
           next if annotation[:A].nil?
           url = annotation[:A][:URI]
-          raise "Pdf:fixup_internal_content_links annotation is missing URI" if url.nil?
+          raise "Pdf:fixup_internal_content_links annotation is missing URI #{annotation.inspect}" if url.nil?
+          # p "!!! annotation url #{url}" if page_number > 1366
           matches = url.match(%r{\.\./(\w+)/0*(\d+)-})
           if url.include?("__data") || url.include?("deddingtonhistory.uk")
+            p "!!! fixup #{page_number+1}: unresolved url #{url}"
             fixup_errors << "#{page_number+1}: unresolved url #{url}"
             next
           end
@@ -103,24 +131,29 @@ class Pdf
             linked_assetid = matches[2].to_i
             linked_asset = Asset.find_by(assetid: linked_assetid)
             raise "Pdf:fixup_internal_content_links cannot find linked_asset linked_assetid #{linked_assetid} url #{url}" if linked_asset.nil?
-            p "!!! fixup_internal_content_links #{page_number}: linked_assetid #{linked_asset.assetid} #{linked_asset.short_name}"
+            p "!!! fixup_internal_content_links #{page_number}: linked_assetid #{linked_asset.assetid} #{linked_asset.short_name}" if page_number > 1366
             # Replace internal link to linked_asset with PDF link to page destination.
-            destinations = @combined.destinations[destination_name(linked_asset)]
-            fixup_errors << "#{page_number+1}: missing destinations linked assetid #{linked_asset.assetid} #{linked_asset.short_name}" unless destinations.present?
-            next if destinations.nil?
+            destinations = @combined_pdf.destinations[destination_name(linked_asset)]
+            if destinations.nil? || destinations.empty?
+              fixup_errors << "#{page_number+1}: missing destinations linked assetid #{linked_asset.assetid} #{linked_asset.short_name}"
+              next
+            end
             # p "!!! found destinations for #{destination_name(linked_asset)} #{destinations.map{ it.class.name }}" if destinations
             raise "Pdf:fixup_internal_content_links missing page destination #{linked_assetid} #{destination_name(linked_asset)}" unless destinations[0].is_a?(HexaPDF::Type::Page)
             annotation[:A] = { S: :GoTo, D: destinations }
+          else
+            p "!!! annotation no match" if page_number > 1366
           end
           # TODO intra-page links to anchors
         end
       end
     end
+    p "!!! finished fixup"
     fixup_errors.each { puts(">>> #{it}") }
   end
 
   def add_banner(pdf, asset = nil)
-    p "!!! add_banner assetid #{asset&.assetid}"
+    # p "!!! add_banner assetid #{asset&.assetid}"
     page = pdf.pages[0]
     canvas = page.canvas(type: :overlay)
     if asset
@@ -199,7 +232,7 @@ class Pdf
   end
 
   def draw_footer(page, asset = nil)
-    p "!!! draw_footer"
+    # p "!!! draw_footer"
     canvas = page.canvas(type: :overlay)
     canvas.fill_color(*ANNOTATION_COLOUR)
     footer_text = "1998–#{Date.today.year} Deddington OnLine"
