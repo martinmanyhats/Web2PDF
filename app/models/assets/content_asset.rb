@@ -3,14 +3,27 @@
 class ContentAsset < Asset
   scope :publishable, -> { where(status: "spidered") }
 
-  def self.sitemap_ordered
-    assets = ContentAsset.sitemap.spiderable_link_elements(Nokogiri::HTML(Asset.sitemap.content_html)).map do |link|
+  HOME_ASSETID = 93
+  ACROBAT_ASSETID = 164
+  SITEMAP_ASSETID = 15632
+  PAGE_NOT_FOUND_ASSETID = 13267
+  INTRODUCTION_ASSETID = 19273
+  PARISH_ARCHIVE_ASSETID = 14046
+
+  def self.ordered
+    assets = ContentAsset.sitemap.spiderable_link_elements(Nokogiri::HTML(ContentAsset.sitemap.content_html)).map do |link|
       assetid = link["data-w2p-assetid"]
       next if assetid.nil?
       ContentAsset.find_by(assetid: assetid) # Which is nil for non-content links eg PDF.
     end.compact
-    p "!!! sitemap_ordered size #{assets.size}"
+    assets.prepend(ContentAsset.introduction)
+    assets.append(*additional_assets)
+    p "!!! ContentAsset:ordered size #{assets.size}"
     assets
+  end
+
+  def self.additional_assets
+    ContentAsset.find_by(assetid: [ACROBAT_ASSETID, 1472])
   end
 
   def generate(head: head, html_filename: nil, pdf_filename: nil)
@@ -53,9 +66,9 @@ class ContentAsset < Asset
         linked_asset
       end
       if breadcrumb_assets.present?
-        breadcrumb_assets.prepend(Asset.home) unless breadcrumb_assets.first.home?
+        breadcrumb_assets.prepend(ContentAsset.home) unless breadcrumb_assets.first.home?
       else
-        breadcrumb_assets = [Asset.home] unless readme?
+        breadcrumb_assets = [ContentAsset.home] unless introduction?
       end
     end
     crumbs = breadcrumb_assets.map do |linked_asset|
@@ -190,6 +203,17 @@ class ContentAsset < Asset
     parsed_content.css("a[href]")
                   .select { |a| !a["href"].start_with?("#") }
                   .compact
+  end
+
+  %w{home acrobat introduction sitemap page_not_found}.each do |name|
+    define_singleton_method name.to_sym do
+      # p "!!! #{name} const #{Asset.const_get("#{name.upcase}_ASSETID")}"
+      ContentAsset.find_by(assetid: ContentAsset.const_get("#{name.upcase}_ASSETID"))
+    end
+    define_method "#{name}?".to_sym do
+      # p "!!! #{name}? assetid #{assetid} const #{Asset.const_get("#{name.upcase}_ASSETID")}"
+      assetid == ContentAsset.const_get("#{name.upcase}_ASSETID")
+    end
   end
 
   private

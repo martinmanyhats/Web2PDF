@@ -6,5 +6,6 @@ class CreateLinks < ActiveRecord::Migration[8.0]
 
       t.timestamps
     end
+    add_index :links, [:source_id, :destination_id], unique: true
   end
 end

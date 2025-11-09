@@ -2,7 +2,7 @@ class Browser
   include Singleton
 
   def html_to_pdf(html_filename, pdf_filename, landscape: true, content: nil)
-    p "!!! html_to_pdf #{html_filename} #{pdf_filename}"
+    # p "!!! html_to_pdf #{html_filename} #{pdf_filename}"
     # raise "Browser:html_to_pdf missing file_root" if @file_root.nil?
     if content.present?
       raise "Browser:html_to_pdf content provided but HTML file already exists #{html_filename}" if File.exist?(html_filename)

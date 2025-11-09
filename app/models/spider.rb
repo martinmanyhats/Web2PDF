@@ -78,7 +78,7 @@ class Spider
 
     linked_asset.update_html_link(node)
     Rails.logger.silence do
-      Link.create!(source: @asset, destination: linked_asset)
+      Link.find_or_create_by!(source: @asset, destination: linked_asset)
       linked_asset.save!
     end
   end

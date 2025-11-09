@@ -19,7 +19,7 @@ class Website < ApplicationRecord
 
   def spider_content(options = {})
     p "!!! spider_content options #{options.inspect} #{inspect}"
-    false && [Asset.readme, Asset.home].each do|asset|
+    [Asset.introduction, Asset.home].each do|asset|
       asset.status = "unspidered"
       asset.save!
     end
@@ -34,8 +34,7 @@ class Website < ApplicationRecord
         spider.spider_asset(asset)
       end
     end
-    # Now do readme and home.
-    [Asset.readme, Asset.home].each { spider.spider_asset(it) }
+    [Asset.introduction, Asset.home].each { spider.spider_asset(it) }
     notify_current_asset(nil, "spider complete")
   end
 
@@ -51,7 +50,7 @@ class Website < ApplicationRecord
         image_assets = ImageAsset.where(assetid: assetids).order(:id)
         excel_assets = MsExcelDocumentAsset.where(assetid: assetids).order(:id)
       else
-        content_assets = ContentAsset.sitemap_ordered.push(Asset.readme)
+        content_assets = ContentAsset.ordered
         pdf_file_assets = PdfFileAsset.publishable
         image_assets = ImageAsset.publishable
         excel_assets = MsExcelDocumentAsset.publishable
