@@ -3,12 +3,18 @@
 class ContentAsset < Asset
   scope :publishable, -> { where(status: "spidered") }
 
-  HOME_ASSETID = 93
-  ACROBAT_ASSETID = 164
-  SITEMAP_ASSETID = 15632
-  PAGE_NOT_FOUND_ASSETID = 13267
-  INTRODUCTION_ASSETID = 19273
-  PARISH_ARCHIVE_ASSETID = 14046
+  FIXED_ASSETS = {
+    home: 93,
+    acrobat: 164,
+    archived_material: 1472,
+    sitemap: 15632,
+    page_not_found: 13267,
+    parish_archive: 14046,
+    introduction: 19273,
+    external_asset: 19288
+  }.freeze
+
+  def self.output_dir = "page"
 
   def self.ordered
     assets = ContentAsset.sitemap.spiderable_link_elements(Nokogiri::HTML(ContentAsset.sitemap.content_html)).map do |link|
@@ -23,14 +29,14 @@ class ContentAsset < Asset
   end
 
   def self.additional_assets
-    ContentAsset.find_by(assetid: [ACROBAT_ASSETID, 1472])
+    [ContentAsset.acrobat, ContentAsset.archived_material]
   end
 
   def generate(head: head, html_filename: nil, pdf_filename: nil)
     raise "ContentAsset:generate unspidered assetid #{assetid}" if status == "unspidered"
     head = website.html_head(short_name) if head.nil?
     html_filename = filename_with_assetid("html", "html") if html_filename.nil?
-    pdf_filename = filename_with_assetid(output_dir, "pdf") if pdf_filename.nil?
+    pdf_filename = generated_filename if pdf_filename.nil?
     p "!!! ContentAsset:generate assetid #{assetid} html_filename #{html_filename} pdf_filename #{pdf_filename}"
     File.open(html_filename, "wb") do |file|
       file.write("<html>\n#{head}\n")
@@ -39,7 +45,7 @@ class ContentAsset < Asset
       body["data-w2p-assetid"] = assetid_formatted
       body.first_element_child.before(Nokogiri::XML::DocumentFragment.parse(header_html))
       generate_html_links(body)
-      generate_external_links(body)
+      generate_iframe_links(body)
       # generate_images(body) # TODO larger images?
       file.write(body.to_html)
       file.write("</html>\n")
@@ -123,72 +129,14 @@ class ContentAsset < Asset
     sitemap_assetids = @sitemap_asset_depth_by_assetid.keys
     non_sitemap_content_assetids = ContentAsset.where(status: "scraped").pluck(:assetid) - sitemap_assetids
     raise "ContentAsset:sort_order non_sitemap_content_assetids #{non_sitemap_content_assetids.join(" ")}" unless non_sitemap_content_assetids.empty?
-
-=begin
-    p "!!! non_sitemap_content_assetids #{non_sitemap_content_assetids.size}"
-    non_sitemap_content_assetids.first(5).each do |assetid|
-      asset = Asset.find_sole_by(assetid: assetid)
-      p "!!! assetid #{assetid} short_name #{asset.short_name}"
-      parent_sitemap_asset = find_parent_in_sitemap(asset)
-      p "!!! parent_sitemap_asset #{parent_sitemap_asset.assetid} #{parent_sitemap_asset.short_name}"
-    end
-
-    sitemap_assets = sitemap_links.map do |link|
-      Rails.logger.silence do
-        linked_asset = Asset.asset_for_uri(website, link.attributes["href"].value)
-        linked_asset.is_a?(ContentAsset) ? linked_asset : nil
-      end
-    end.compact
-    p "!!! sort_order sitemap_assets #{sitemap_assets.size}"
-    ordered_assets = SortedSet.new
-    sitemap_depth_by_assetid = {}
-    sitemap_assets.each do |asset|
-      sitemap_depth = asset.sitemap_depth
-      if ordered_assets.include?(asset)
-        # See if we now have a lower depth in the sitemap.
-      else ordered_assets.include?(asset) && x
-        ordered_assets << asset
-      asset.best_sitemap_depth = 42
-      end
-      if better_match(ordered_assets)
-      end
-    end
-=end
-  end
-
-  def XXfind_parent_in_sitemap(asset)
-    best_depth = 999
-    found_parent = nil
-    parent_assets = Set.new(asset.parents)
-    parent_assets.each do |parent|
-      if @sitemap_asset_depth_by_assetid.has_key?(parent.assetid) && @sitemap_asset_depth_by_assetid[parent.assetid] < best_depth
-        found_parent = parent
-        best_depth = @sitemap_asset_depth_by_assetid[parent.assetid]
-      end
-    end
-    raise "ContentAsset:find_parent_in_sitemap parent not found for assetid #{asset.assetid}" if found_parent.nil?
-    found_parent
   end
 
   def sitemap_depth(link)
     link.ancestors("tr").size - 2
   end
 
-  def sort_order2(links_visited = Set.new)
-    links = Link.where(source: self)
-    children = links.select { it.destination.is_a?(ContentAsset) && !links_visited.include?(it) }.first(3).map do |link|
-      p "!!! link.destination assetid #{link.destination.assetid}"
-      links_visited << link
-      [link.destination, link.destination.sort_order(links_visited)]
-    end
-    pp children
-    children
-  end
-
   def generated_filename
-    raise "generated_filename website nil" if website.nil?
-    raise "generated_filename website.output_root_dir nil" if website.output_root_dir.nil?
-    "#{website.output_root_dir}/page/#{filename_base}.pdf"
+    filename_with_assetid("pdf")
   end
 
   def filename_base
@@ -205,20 +153,18 @@ class ContentAsset < Asset
                   .compact
   end
 
-  %w{home acrobat introduction sitemap page_not_found}.each do |name|
+  FIXED_ASSETS.keys.each do |name|
     define_singleton_method name.to_sym do
-      # p "!!! #{name} const #{Asset.const_get("#{name.upcase}_ASSETID")}"
-      ContentAsset.find_by(assetid: ContentAsset.const_get("#{name.upcase}_ASSETID"))
+      # p "!!! #{name} const #{FIXED_ASSETS[name]}"
+      ContentAsset.find_by(assetid: FIXED_ASSETS[name])
     end
     define_method "#{name}?".to_sym do
-      # p "!!! #{name}? assetid #{assetid} const #{Asset.const_get("#{name.upcase}_ASSETID")}"
-      assetid == ContentAsset.const_get("#{name.upcase}_ASSETID")
+      # p "!!! #{name}? assetid #{assetid} vs #{FIXED_ASSETS[name]}"
+      assetid == FIXED_ASSETS[name]
     end
   end
 
   private
-
-  def self.output_dir = "page"
 
   def generate_html_links(body)
     body.css("a[data-w2p-type]").each do |link|
@@ -227,12 +173,10 @@ class ContentAsset < Asset
       case link_type
       when "asset"
         generate_asset_html_link(link)
-      when "static"
-        generate_static_html_link(link)
       when "external"
-        # Nothing.
+        generate_external_html_link(link)
       else
-        raise "ContentAsset:generate_html_links unexpected link_type #{link_type}"
+        raise "ContentAsset:generate_html_links unexpected link_type #{link.inspect}"
       end
     end
   end
@@ -246,25 +190,23 @@ class ContentAsset < Asset
     # p "!!! linked_asset #{linked_asset.inspect}"
     case linked_asset
     when ContentAsset
-      # p "!!! generate_asset_html_link internally linking to content #{url} #{linked_asset.title}"
-      link["href"] = "../page/#{linked_asset.filename_base}.pdf"
+      # Nothing to do.
     when DataAsset
-      data_url = "../#{linked_asset.output_dir}/#{linked_asset.filename_base}"
-      # p "!!! generate_asset_html_link internally linking #{url} to #{data_url}"
-      link["href"] = data_url
+      link["href"] = "./assets/#{linked_asset.output_dir}/#{linked_asset.filename_base}"
+      # p "!!! generate_asset_html_link internally linking to data #{url} to #{link["href"]}"
     else
-      raise "ContentAsset:generate_asset_html_link unexpected class"
+      raise "ContentAsset:generate_asset_html_link unexpected class #{link.inspect}"
     end
   end
 
-  def generate_static_html_link(link)
-    p "!!! generate_static_html_link link #{link.inspect}"
-    link["href"] = "#{website.output_root_dir}#{link["href"]}"
+  def generate_external_html_link(link)
+    p "!!! generate_external_html_link link #{link.inspect}"
+    # TODO
   end
 
-  def generate_external_links(parsed_content)
+  def generate_iframe_links(parsed_content)
     parsed_content.css("iframe").each do |iframe|
-      p "!!! generate_external_links #{iframe["src"].inspect}"
+      p "!!! generate_iframe_links #{iframe["src"].inspect}"
       iframe.add_next_sibling("<p class='iframe-comment'>External URL: <a href='#{iframe["src"]}'>#{iframe["src"]}</a></p>")
     end
   end

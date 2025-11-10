@@ -48,7 +48,7 @@ class Pdf
         raise "Pdf:combine_pdfs not ContentAsset #{asset.assetid}" unless asset.is_a?(ContentAsset)
         page_count = append_asset(asset, page_number, contents_outline)
         # Skip due to mess of bad links.
-        skip = [ContentAsset::PARISH_ARCHIVE_ASSETID].include?(asset.assetid)
+        skip = [ContentAsset::parish_archive].include?(asset)
         fixup_pages.append(*Array.new(page_count, !skip))
         # fixup_pages[page_number..page_number+page_count-1] = !skip
         page_number += page_count
@@ -56,22 +56,13 @@ class Pdf
       p "!!! last content page_number #{page_number}"
       p "!!! fixup_pages #{fixup_pages.select{it}.size}"
 
-      unless options[:contentonly]
-        {
-          "PDFs": pdf_assets,
-          "Images": image_assets,
-          "Excel files": excel_assets
-        }.each_pair do |name, assets|
-          outline = @combined_pdf.outline.add_item(name)
-          assets.all.each do |asset|
-            page_count = append_asset(asset, page_number, outline) { |pdf| add_banner(pdf, asset) }
-            fixup_pages[page_number..page_number+page_count-1] = false
-            page_number += page_count
-          end
-        end
+      if options[:includepdfs]
+        page_number += append_assets("PDFs", pdf_assets)
       end
+      page_number += append_assets("Images", image_assets)
+      page_number += append_assets("Excel files", excel_assets)
 
-      fixup_internal_content_links(fixup_pages)
+      fixup_internal_content_links(fixup_pages, options[:includeall])
       set_initial_view
     end
 
@@ -80,6 +71,15 @@ class Pdf
     filename = "DeddingtonHistory-#{DateTime.now.strftime("%Y%m%d")}.pdf"
     @combined_pdf.write("#{website.output_root_dir}/#{filename}", optimize: true)
     @combined_pdf
+  end
+
+  def append_assets(name, assets)
+    outline = @combined_pdf.outline.add_item(name)
+    assets.all.each do |asset|
+      page_count = append_asset(asset, page_number, outline) { |pdf| add_banner(pdf, asset) }
+      fixup_pages[page_number..page_number+page_count-1] = false
+    end
+    page_count
   end
 
   def append_asset(asset, page_number, outline = nil)
@@ -111,7 +111,7 @@ class Pdf
     p "!!! Pdf:set_initial_view catalog #{prefs.each.map{ "#{it}=#{prefs[it]} "} }"
   end
 
-  def fixup_internal_content_links(fixup_pages)
+  def fixup_internal_content_links(fixup_pages, include_all = false)
     p "!!! fixup_internal_content_links size #{fixup_pages.size}"
     fixup_errors = []
     p "!!! fixup_internal_content_links pages count #{@combined_pdf.pages.count}"
@@ -124,29 +124,29 @@ class Pdf
           next if annotation[:A].nil?
           url = annotation[:A][:URI]
           raise "Pdf:fixup_internal_content_links annotation is missing URI #{annotation.inspect}" if url.nil?
-          # p "!!! annotation url #{url}" if page_number > 1366
-          matches = url.match(%r{\.\./(\w+)/0*(\d+)-})
           if url.include?("__data") || url.include?("//deddingtonhistory.uk")
             p "!!! fixup #{page_number+1}: unresolved url #{url}"
             fixup_errors << "#{page_number+1}: unresolved url #{url}"
             next
           end
+          matches = url.match(%r{\.\./(\w+)/0*(\d+)-})
           if matches
             linked_assetid = matches[2].to_i
             linked_asset = Asset.find_by(assetid: linked_assetid)
             raise "Pdf:fixup_internal_content_links cannot find linked_asset linked_assetid #{linked_assetid} url #{url}" if linked_asset.nil?
-            p "!!! fixup_internal_content_links #{page_number}: linked_assetid #{linked_asset.assetid} #{linked_asset.short_name}" if page_number > 1366
-            # Replace internal link to linked_asset with PDF link to page destination.
-            destinations = @combined_pdf.destinations[destination_name(linked_asset)]
-            if destinations.nil? || destinations.empty?
-              fixup_errors << "#{page_number+1}: missing destinations linked assetid #{linked_asset.assetid} #{linked_asset.short_name}"
-              next
+            if include_all
+              # Replace internal link to linked_asset with PDF link to page destination.
+              destinations = @combined_pdf.destinations[destination_name(linked_asset)]
+              if destinations.nil? || destinations.empty?
+                fixup_errors << "#{page_number+1}: missing destinations linked assetid #{linked_asset.assetid} #{linked_asset.short_name}"
+                next
+              end
+              # p "!!! found destinations for #{destination_name(linked_asset)} #{destinations.map{ it.class.name }}" if destinations
+              raise "Pdf:fixup_internal_content_links missing page destination #{linked_assetid} #{destination_name(linked_asset)}" unless destinations[0].is_a?(HexaPDF::Type::Page)
+              annotation[:A] = { S: :GoTo, D: destinations }
+            else
+              fixup_external_link(annotation, linked_asset)
             end
-            # p "!!! found destinations for #{destination_name(linked_asset)} #{destinations.map{ it.class.name }}" if destinations
-            raise "Pdf:fixup_internal_content_links missing page destination #{linked_assetid} #{destination_name(linked_asset)}" unless destinations[0].is_a?(HexaPDF::Type::Page)
-            annotation[:A] = { S: :GoTo, D: destinations }
-          else
-            # p "!!! annotation no match" if page_number > 1366
           end
           # TODO intra-page links to anchors
         end
@@ -154,6 +154,12 @@ class Pdf
     end
     p "!!! finished fixup"
     fixup_errors.each { puts(">>> #{it}") }
+  end
+
+  def fixup_external_link(annotation, linked_asset)
+    # Add tooltip and link to external file explainer page.
+    tooltip_text = "Asset ##{linked_asset.assetid_formatted}"
+    annotation[:Contents] = tooltip_text
   end
 
   def add_banner(pdf, asset = nil)
@@ -244,7 +250,7 @@ class Pdf
     canvas.text(0xe3.chr(Encoding::UTF_8), at: [20, 4])
     canvas.font("Helvetica", size: 10)
     canvas.text(footer_text, at: [32, 4])
-    canvas.text("##{asset.assetid}", at: [page.box.width - 40, 4])
+    canvas.text("##{asset.assetid_formatted}", at: [page.box.width - 40, 4])
   end
 
   def fixup_pdf(pdf)

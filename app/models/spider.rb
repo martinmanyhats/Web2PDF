@@ -83,7 +83,7 @@ class Spider
     end
   end
 
-  def spider_static_links(doc)
+  def XXspider_static_links(doc)
     @_static_pattern ||= begin
                            pattern = "^#{@website.url}/(sitemap)$"
                            Regexp.new(pattern)
@@ -106,7 +106,7 @@ class Spider
 
   def generate_external_links(parsed_content)
     parsed_content.css("iframe").each do |iframe|
-      p "!!! generate_external_links #{iframe["src"].inspect}"
+      p "!!! generate_iframe_links #{iframe["src"].inspect}"
       iframe.add_next_sibling("<p class='iframe-comment'>External URL: <a href='#{iframe["src"]}'>#{iframe["src"]}</a></p>")
     end
   end

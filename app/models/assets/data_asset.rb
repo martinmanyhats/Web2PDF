@@ -11,7 +11,7 @@ class DataAsset < Asset
 
   def generate
     "!!! DataAsset:generate assetid #{assetid}"
-    copy_filename = "#{website.output_root_dir}/#{output_dir}/#{assetid_formatted}-#{filename_from_data_url}"
+    copy_filename = "#{website.output_root_dir}/assets/#{output_dir}/#{assetid_formatted}-#{filename_from_data_url}"
     p "!!! DataAsset:generate url #{url} copy_filename #{copy_filename}"
     IO.copy_stream(URI.open("#{url}"), copy_filename)
     copy_filename
@@ -47,7 +47,7 @@ class DataAsset < Asset
           referring_assets = Link.where(destination: asset).map(&:source).uniq
           referring_assets.map do |referring_asset|
             raise "DataAsset:generate_toc referring asset not ContentAsset assetid #{referring_asset.assetid}" unless referring_asset.is_a?(ContentAsset)
-            "<a href='#{referring_asset.filename_with_assetid("page", "pdf")}'>#{referring_asset.title}</a>"
+            "<a href='#{referring_asset.generated_filename}'>#{referring_asset.title}</a>"
           end.join("<br />")
         end.join("<br />")
         file.write("<tr>")

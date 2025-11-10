@@ -5,7 +5,7 @@ class Asset < ApplicationRecord
   has_many :asset_urls
   has_many :links, dependent: :destroy, foreign_key: "source_id"
 
-  ASSETID_FORMAT = "%06d".freeze
+  ASSETID_FORMAT = "%05d".freeze
   SAFE_NAME_REPLACEMENT = "_".freeze
 
   def output_dir = self.class.output_dir
@@ -90,8 +90,10 @@ class Asset < ApplicationRecord
     name.present? ? name : short_name
   end
 
-  def filename_with_assetid(dir, suffix)
-    "#{website.output_root_dir}/#{dir}/#{filename_base}.#{suffix}"
+  def filename_with_assetid(suffix, subdir = nil)
+    raise "Asset:filename_with_assetid website.output_root_dir nil" if website.output_root_dir.nil?
+    subdir.nil? ? subdir = "assets/#{output_dir}" : ""
+    "#{website.output_root_dir}/#{subdir}/#{filename_base}.#{suffix}"
   end
 
   def assetid_formatted = ASSETID_FORMAT % assetid
@@ -138,9 +140,8 @@ class Asset < ApplicationRecord
   end
 
   def self.create_dirs(root_dir)
-    dirs = output_dirs
-    dirs << "html"
-    dirs.each { FileUtils.mkdir_p("#{root_dir}/#{it}") }
+    output_dirs.each { FileUtils.mkdir_p("#{root_dir}/assets/#{it}") }
+    FileUtils.mkdir_p("#{root_dir}/html")
   end
 
   def self.output_dirs

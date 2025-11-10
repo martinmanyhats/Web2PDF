@@ -31,11 +31,11 @@ class ImageAsset < DataAsset
     canvas.fill_color(237, 229, 211)
     canvas.rectangle(0, image.info.height, canvas_width, image.info.height).fill
     canvas.image(image, at: [(canvas_width - image.info.width)/2, 0], width: image.info.width, height: image.info.height)
-    image_pdf.write(filename_with_assetid("pdf", "pdf"), optimize: true)
+    image_pdf.write(generated_filename, optimize: true)
   end
 
   def generated_filename
-    "#{website.output_root_dir}/pdf/#{filename_base}.pdf"
+    filename_with_assetid("pdf")
   end
 
   def banner_title = name

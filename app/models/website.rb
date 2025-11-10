@@ -19,7 +19,7 @@ class Website < ApplicationRecord
 
   def spider_content(options = {})
     p "!!! spider_content options #{options.inspect} #{inspect}"
-    [Asset.introduction, Asset.home].each do|asset|
+    [ContentAsset.introduction, ContentAsset.home].each do|asset|
       asset.status = "unspidered"
       asset.save!
     end
@@ -34,7 +34,6 @@ class Website < ApplicationRecord
         spider.spider_asset(asset)
       end
     end
-    [Asset.introduction, Asset.home].each { spider.spider_asset(it) }
     notify_current_asset(nil, "spider complete")
   end
 

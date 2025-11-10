@@ -86,7 +86,7 @@ class WebsitesController < ApplicationController
   def combine_pdfs
     options = {}
     options[:assetids] = params[:assetids].to_s if params[:assetids].present?
-    options[:contentonly] = params[:webroot] if params[:contentonly].present?
+    options[:includepdfs] = params[:includepdfs] if params[:includepdfs].present?
     @combined_pdf = Pdf.instance.combine_pdfs(Website.find(1), options)
   end
   def experiment
