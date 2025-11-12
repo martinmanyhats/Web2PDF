@@ -6,6 +6,10 @@
     %a{href: "#content"}< Content (#{ContentAsset.count_with_subclasses("spidered")})
   %li
     %a{href: "#pdfs"}< PDF (#{PdfFileAsset.count_with_subclasses("linked")})
+  %li
+    %a{href: "#pdfs"}< Image (#{ImageAsset.count_with_subclasses("linked")})
+  %li
+    %a{href: "#pdfs"}< File (#{FileAsset.count_with_subclasses("linked")})
 %h2{id: "content"} Content
 %table
   %tbody

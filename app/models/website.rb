@@ -6,7 +6,7 @@ class Website < ApplicationRecord
   broadcasts_refreshes
   after_update_commit -> { broadcast_refresh_later }
 
-  FileAsset = Struct.new(:assetid, :short_name, :filename, :url, :digest)
+  # FileAsset = Struct.new(:assetid, :short_name, :filename, :url, :digest)
 
   def spider(options = {})
     p "!!! Website::spider options #{options.inspect} #{inspect}"
@@ -44,22 +44,29 @@ class Website < ApplicationRecord
       Asset.create_dirs(output_root_dir)
       if options[:assetids].present?
         assetids = options[:assetids].split(",").map(&:to_i)
-        content_assets = ContentAsset.where(assetid: assetids).order(:id)
-        pdf_file_assets = PdfFileAsset.where(assetid: assetids).order(:id)
-        image_assets = ImageAsset.where(assetid: assetids).order(:id)
-        excel_assets = MsExcelDocumentAsset.where(assetid: assetids).order(:id)
+        content_assets = ContentAsset.where(assetid: assetids)
+        pdf_file_assets = PdfFileAsset.where(assetid: assetids)
+        image_assets = ImageAsset.where(assetid: assetids)
+        file_assets = FileAsset.where(assetid: assetids)
+        excel_assets = MsExcelDocumentAsset.where(assetid: assetids)
       else
-        content_assets = ContentAsset.ordered
+        content_assets = ContentAsset.sitemap_ordered
         pdf_file_assets = PdfFileAsset.publishable
         image_assets = ImageAsset.publishable
+        file_assets = FileAsset.publishable
         excel_assets = MsExcelDocumentAsset.publishable
+        not_ordered = ContentAsset.publishable - content_assets
+        not_ordered.each { p ">>> generate_archive not_ordered #{it.assetid} #{it.short_name}" }
+        raise "Website:generate_archive assets missing from sitemap" unless not_ordered.empty?
       end
+
       Browser.instance.session do
         ContentAsset.generate(content_assets)
       end
       unless options[:contentonly]
         PdfFileAsset.generate(pdf_file_assets)
         ImageAsset.generate(image_assets)
+        FileAsset.generate(file_assets)
         MsExcelDocumentAsset.generate(excel_assets)
         # MsWordDocumentAsset.generate(word_assets)
       end

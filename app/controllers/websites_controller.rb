@@ -87,6 +87,7 @@ class WebsitesController < ApplicationController
     options = {}
     options[:assetids] = params[:assetids].to_s if params[:assetids].present?
     options[:includepdfs] = params[:includepdfs] if params[:includepdfs].present?
+    options[:dumpdestinations] = params[:dumpdestinations] if params[:dumpdestinations].present?
     @combined_pdf = Pdf.instance.combine_pdfs(Website.find(1), options)
   end
   def experiment

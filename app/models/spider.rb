@@ -14,7 +14,6 @@ class Spider
 
     doc = Nokogiri::HTML(@asset.content_html)
     spiderable_links(doc).each { spider_link(it) }
-    # spider_static_links(doc)
 
     @asset.status = "spidered"
     @asset.content_html = doc.to_html
@@ -49,10 +48,9 @@ class Spider
     end
 
     linked_asset = Asset.asset_for_uri(@website, uri)
-    # p "!!! spider_link linked_asset #{linked_asset.inspect}"
     raise "Spider:spider_link missing asset uri #{uri} from @asset #{@asset.inspect}" if linked_asset.nil?
 
-    # p "!!! Spider:spider_link linked_asset #{linked_asset.inspect}"
+    p "!!! Spider:spider_link linked_asset #{linked_asset.inspect}"
     if linked_asset.is_a?(RedirectPageAsset)
       # redirect_url will already contain resolved indirections, use that instead.
       p "!!! Spider:spider_link redirected linked_asset.redirect_url #{linked_asset.redirect_url}"
@@ -80,34 +78,6 @@ class Spider
     Rails.logger.silence do
       Link.find_or_create_by!(source: @asset, destination: linked_asset)
       linked_asset.save!
-    end
-  end
-
-  def XXspider_static_links(doc)
-    @_static_pattern ||= begin
-                           pattern = "^#{@website.url}/(sitemap)$"
-                           Regexp.new(pattern)
-                         end
-    # p "!!! Spider:spider_static_links #{@_static_pattern.inspect}"
-    doc.css("a[href]")
-       .select { it["href"].match?(@_static_pattern) }
-       .each do |node|
-      node['data-w2p-type'] = "static"
-      name = node["href"].match(@_static_pattern)[1]
-      p "=============== spider_static_links name #{name}"
-      case name
-      when "sitemap"
-        node["href"] = "/sitemap.pdf"
-      else
-        raise "Spider:spider_static_links unknown static link #{name}"
-      end
-    end
-  end
-
-  def generate_external_links(parsed_content)
-    parsed_content.css("iframe").each do |iframe|
-      p "!!! generate_iframe_links #{iframe["src"].inspect}"
-      iframe.add_next_sibling("<p class='iframe-comment'>External URL: <a href='#{iframe["src"]}'>#{iframe["src"]}</a></p>")
     end
   end
 

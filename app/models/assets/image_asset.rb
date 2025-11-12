@@ -5,17 +5,13 @@ require 'open-uri'
 class ImageAsset < DataAsset
   def self.output_dir = "image"
   def self.toc_name = "Images"
-
-  def self.XXgenerate(website, assetids)
-    assets = super
-    # TODO TOC
-  end
+  def asset_link_type = "intasset"
 
   def generate
     header_height = 18
     image_pdf = HexaPDF::Document.new
     image_path = url
-    p "!!! ImageAsset:generate filename #{image_path}"
+    p "!!! ImageAsset:generate image_path #{image_path}"
     if File.extname(image_path).downcase == ".gif"
       img = Vips::Image.new_from_buffer(URI.open(image_path, &:read), "")
       image_path = "#{Dir.tmpdir}/#{filename_base.sub(%r{gif$}i, "png")}"

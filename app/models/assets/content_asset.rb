@@ -15,8 +15,9 @@ class ContentAsset < Asset
   }.freeze
 
   def self.output_dir = "page"
+  def asset_link_type = "intasset"
 
-  def self.ordered
+  def self.sitemap_ordered
     assets = ContentAsset.sitemap.spiderable_link_elements(Nokogiri::HTML(ContentAsset.sitemap.content_html)).map do |link|
       assetid = link["data-w2p-assetid"]
       next if assetid.nil?
@@ -24,7 +25,7 @@ class ContentAsset < Asset
     end.compact
     assets.prepend(ContentAsset.introduction)
     assets.append(*additional_assets)
-    p "!!! ContentAsset:ordered size #{assets.size}"
+    p "!!! ContentAsset:sitemap_ordered size #{assets.size}"
     assets
   end
 
@@ -78,7 +79,7 @@ class ContentAsset < Asset
       end
     end
     crumbs = breadcrumb_assets.map do |linked_asset|
-      "<span class='w2p-breadcrumb'><a href='#{linked_asset.generated_filename}'>#{linked_asset.short_name}</a></span>"
+      "<span class='w2p-breadcrumb'><a href='intasset://#{linked_asset.assetid}:#{assetid}'>#{linked_asset.short_name}</a></span>"
     end
     "<div class='w2p-header'>#{html_title}#{"<span class='w2p-breadcrumbs'>#{crumbs.join(" > ")}</span>"}</div>"
   end
@@ -172,35 +173,28 @@ class ContentAsset < Asset
       link_type = link["data-w2p-type"]
       case link_type
       when "asset"
-        generate_asset_html_link(link)
+        generate_asset_link(link)
       when "external"
-        generate_external_html_link(link)
+        generate_external_link(link)
       else
         raise "ContentAsset:generate_html_links unexpected link_type #{link.inspect}"
       end
     end
   end
 
-  def generate_asset_html_link(link)
+  def generate_asset_link(link)
     url = link["href"]
-    raise "ContentAsset:generate_asset_html_link url missing in assetid #{assetid}" if url.blank?
+    raise "ContentAsset:generate_asset_link url missing in assetid #{assetid}" if url.blank?
     link_assetid = link.attributes["data-w2p-assetid"]&.value
-    raise "ContentAsset:generate_asset_html_link missing link_assetid in #{assetid} url #{url}" if link_assetid.nil?
+    raise "ContentAsset:generate_asset_link missing data-w2p-assetid in #{assetid} url #{url}" if link_assetid.nil?
     linked_asset = Asset.find_by(assetid: link_assetid)
-    # p "!!! linked_asset #{linked_asset.inspect}"
-    case linked_asset
-    when ContentAsset
-      # Nothing to do.
-    when DataAsset
-      link["href"] = "./assets/#{linked_asset.output_dir}/#{linked_asset.filename_base}"
-      # p "!!! generate_asset_html_link internally linking to data #{url} to #{link["href"]}"
-    else
-      raise "ContentAsset:generate_asset_html_link unexpected class #{link.inspect}"
-    end
+    raise "ContentAsset:generate_asset_link link #{link_assetid} not found" if linked_asset.nil?
+    p "!!! generate_asset_link linked_asset #{linked_asset.inspect}"
+    link["href"] = "#{linked_asset.asset_link_type}://#{link_assetid}:#{assetid}"
   end
 
-  def generate_external_html_link(link)
-    p "!!! generate_external_html_link link #{link.inspect}"
+  def generate_external_link(link)
+    p "!!! generate_external_link link #{link.inspect}"
     # TODO
   end
 

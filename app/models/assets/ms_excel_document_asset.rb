@@ -3,6 +3,7 @@
 class MsExcelDocumentAsset < DataAsset
   def self.output_dir = "excel"
   def self.toc_name = "Excel files"
+  def asset_link_type = "extasset"
 
   def generate
     p "!!! MsExcelDocumentAsset:generate assetid #{assetid} #{generated_filename}"
