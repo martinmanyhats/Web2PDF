@@ -8,7 +8,7 @@ class ImageAsset < DataAsset
   def asset_link_type = "intasset"
 
   def generate
-    header_height = 18
+    header_height = 16
     image_pdf = HexaPDF::Document.new
     image_path = url
     p "!!! ImageAsset:generate image_path #{image_path}"
@@ -34,5 +34,5 @@ class ImageAsset < DataAsset
     filename_with_assetid("pdf")
   end
 
-  def banner_title = name
+  def banner_title = "#{name} ##{assetid}"
 end

@@ -154,6 +154,9 @@ class Asset < ApplicationRecord
     node['data-w2p-assetid'] = assetid.to_s
   end
 
+  def internal_asset? = asset_link_type == "intasset"
+  def external_asset? = !internal_asset?
+
   def self.count_with_subclasses(status = nil)
     types = [name] + descendants.map(&:name)
     assets = where(type: types)

@@ -11,7 +11,7 @@ class ContentAsset < Asset
     page_not_found: 13267,
     parish_archive: 14046,
     introduction: 19273,
-    external_asset: 19288
+    external_assets: 19288
   }.freeze
 
   def self.output_dir = "page"
@@ -41,14 +41,14 @@ class ContentAsset < Asset
     p "!!! ContentAsset:generate assetid #{assetid} html_filename #{html_filename} pdf_filename #{pdf_filename}"
     File.open(html_filename, "wb") do |file|
       file.write("<html>\n#{head}\n")
-      body = Nokogiri::HTML("<div class='w2p-content'>#{content_html}</div>").css("body").first
-      body["id"] = "w2p-page-#{assetid_formatted}"
-      body["data-w2p-assetid"] = assetid_formatted
-      body.first_element_child.before(Nokogiri::XML::DocumentFragment.parse(header_html))
-      generate_html_links(body)
-      generate_iframe_links(body)
-      # generate_images(body) # TODO larger images?
-      file.write(body.to_html)
+      @content_body = Nokogiri::HTML("<div class='w2p-content'>#{content_html}</div>").css("body").first
+      @content_body["id"] = "w2p-page-#{assetid_formatted}"
+      @content_body["data-w2p-assetid"] = assetid_formatted
+      @content_body.first_element_child.before(Nokogiri::XML::DocumentFragment.parse(header_html))
+      generate_html_links
+      generate_iframe_links
+      # generate_images # TODO larger images?
+      file.write(@content_body.to_html)
       file.write("</html>\n")
       file.close
       save!
@@ -167,8 +167,8 @@ class ContentAsset < Asset
 
   private
 
-  def generate_html_links(body)
-    body.css("a[data-w2p-type]").each do |link|
+  def generate_html_links
+    @content_body.css("a[data-w2p-type]").each do |link|
       # p "!!! generate_html_links link #{link.inspect}"
       link_type = link["data-w2p-type"]
       case link_type
@@ -191,6 +191,10 @@ class ContentAsset < Asset
     raise "ContentAsset:generate_asset_link link #{link_assetid} not found" if linked_asset.nil?
     p "!!! generate_asset_link linked_asset #{linked_asset.inspect}"
     link["href"] = "#{linked_asset.asset_link_type}://#{link_assetid}:#{assetid}"
+    if linked_asset.external_asset?
+      # Append assetid to link contents.
+      link.add_child(Nokogiri::HTML::DocumentFragment.parse("<span class='w2p-extassetid'>[##{linked_asset.assetid}]</span>"))
+    end
   end
 
   def generate_external_link(link)
@@ -198,8 +202,8 @@ class ContentAsset < Asset
     # TODO
   end
 
-  def generate_iframe_links(parsed_content)
-    parsed_content.css("iframe").each do |iframe|
+  def generate_iframe_links
+    @content_body.css("iframe").each do |iframe|
       p "!!! generate_iframe_links #{iframe["src"].inspect}"
       iframe.add_next_sibling("<p class='iframe-comment'>External URL: <a href='#{iframe["src"]}'>#{iframe["src"]}</a></p>")
     end

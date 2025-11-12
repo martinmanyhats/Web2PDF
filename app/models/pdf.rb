@@ -56,9 +56,6 @@ class Pdf
       p "!!! last content @page_number #{@page_number}"
       p "!!! @fixup_pages.true #{@fixup_pages.select{it}.size}"
 
-      if options[:includepdfs]
-        @page_number += append_assets("PDFs", pdf_assets)
-      end
       @page_number += append_assets("Images", image_assets)
       @page_number += append_assets("Excel files", excel_assets)
       p "!!! combine_pdfs last @page_number #{@page_number}"
@@ -67,7 +64,7 @@ class Pdf
         @combined_pdf.destinations.each { |name, dest| p "!!! #{name} #{dest}" }
       end
 
-      fixup_internal_content_links(options[:includepdfs])
+      fixup_internal_content_links
       set_initial_view
     end
 
@@ -118,7 +115,7 @@ class Pdf
     p "!!! Pdf:set_initial_view catalog #{prefs.each.map{ "#{it}=#{prefs[it]} "} }"
   end
 
-  def fixup_internal_content_links(include_pdfs)
+  def fixup_internal_content_links
     p "!!! fixup_internal_content_links size #{@fixup_pages.size}"
     p "!!! fixup_internal_content_links pages count #{@combined_pdf.pages.count}"
     @fixup_pages.each_index do |page_number|
@@ -133,23 +130,20 @@ class Pdf
           url = annotation[:A][:URI]
           p "!!! page_number #{page_number} url #{url}"
           if url.start_with?("intasset://")
-            matches = url.match(%r{intasset://(\d+):(\d+)})
-            raise "Pdf:fixup_internal_content_links malformed url #{url}" if matches.nil? || matches.length != 3
-            linked_assetid = matches[1].to_i
-            source_assetid = matches[2].to_i
-            linked_asset = Asset.find_by(assetid: linked_assetid)
-            raise "Pdf:fixup_internal_content_links cannot find linked_asset #{linked_assetid} #{url} source #{source_assetid}" if linked_asset.nil?
-            next if linked_asset.is_a?(PdfFileAsset) && !include_pdfs
-            # Replace internal link to linked_asset with a PDF link to page destination.
-            p "!!! destination_name(linked_asset) #{destination_name(linked_asset)}"
-            destinations = @combined_pdf.destinations[destination_name(linked_asset)]
-            p "!!! found destinations for #{destination_name(linked_asset)} #{destinations.map{ it.class.name }}" if destinations
-            unless destinations.present? && destinations[0].is_a?(HexaPDF::Type::Page)
-              raise "Pdf:fixup_internal_content_links missing page destination #{linked_assetid} #{destination_name(linked_asset)} source #{source_assetid}"
-            end
-            annotation[:A] = {S: :GoTo, D: destinations}
+            (linked_asset, source_assetid) = decode_asset_link(url)
+            # Replace internal link to asset with a PDF link to destination.
+            annotation[:A] = {S: :GoTo, D: destinations_for_asset(linked_asset)}
           elsif url.start_with?("extasset://")
-            p "!!! TODO #{url}"
+            p "!!! extasset #{url}"
+            (linked_asset, _) = decode_asset_link(url)
+            if linked_asset.is_a?(DataAsset)
+              # Replace internal link to asset with a PDF link to explanatory page.
+              annotation[:A] = {S: :GoTo, D: destinations_for_asset(ContentAsset.external_assets)}
+            else
+              raise "Pdf:fixup_internal_content_links extasset is not DataAsset #{url}"
+            end
+          else
+            p "!!! normal URL #{url}"
           end
         end
         next
@@ -167,21 +161,21 @@ class Pdf
           matches = url.match(%r{\.\./(\w+)/*(\d{5})-})
           if matches
             linked_assetid = matches[2].to_i
-            linked_asset = Asset.find_by(assetid: linked_assetid)
-            raise "Pdf:fixup_internal_content_links cannot find linked_asset linked_assetid #{linked_assetid} url #{url}" if linked_asset.nil?
-            # Replace internal link to linked_asset with a PDF link to page destination.
-            destinations = @combined_pdf.destinations[destination_name(linked_asset)]
+            asset = Asset.find_by(assetid: linked_assetid)
+            raise "Pdf:fixup_internal_content_links cannot find asset linked_assetid #{linked_assetid} url #{url}" if asset.nil?
+            # Replace internal link to asset with a PDF link to page destination.
+            destinations = @combined_pdf.destinations[destination_name(asset)]
             if destinations.nil? || destinations.empty?
               if include_pdfs
-                @pdf_errors << "#{page_number+1}: missing destinations linked asset #{linked_asset.assetid} #{linked_asset.short_name}"
+                @pdf_errors << "#{page_number+1}: missing destinations linked asset #{asset.assetid} #{asset.short_name}"
               else
                 # Asset must be external.
-                fixup_external_link(annotation, linked_asset)
+                fixup_external_link(annotation, asset)
               end
               next
             end
-            p "!!! found destinations for #{destination_name(linked_asset)} #{destinations.map{ it.class.name }}" if destinations
-            raise "Pdf:fixup_internal_content_links missing page destination #{linked_assetid} #{destination_name(linked_asset)}" unless destinations[0].is_a?(HexaPDF::Type::Page)
+            p "!!! found destinations for #{destination_name(asset)} #{destinations.map{ it.class.name }}" if destinations
+            raise "Pdf:fixup_internal_content_links missing page destination #{linked_assetid} #{destination_name(asset)}" unless destinations[0].is_a?(HexaPDF::Type::Page)
             annotation[:A] = {S: :GoTo, D: destinations}
           end
         end
@@ -191,8 +185,28 @@ class Pdf
     p "!!! finished fixup"
   end
 
-  def fixup_external_link(annotation, linked_asset)
-    # Add tooltip and link to external file explainer page.
+  def decode_asset_link(url)
+    matches = url.match(%r{(int|ext)asset://(\d+):(\d+)})
+    raise "Pdf:decode_asset_link malformed url #{url}" if matches.nil? || matches.length != 4
+    linked_assetid = matches[2].to_i
+    source_assetid = matches[3].to_i
+    linked_asset = Asset.find_by(assetid: linked_assetid)
+    raise "Pdf:decode_asset_link cannot find asset #{linked_assetid} #{url} source #{source_assetid}" if linked_asset.nil?
+    [linked_asset, source_assetid]
+  end
+
+  def destinations_for_asset(asset)
+    destinations = @combined_pdf.destinations[destination_name(asset)]
+    p "!!! found destinations for #{destination_name(asset)} #{destinations.map{ it.class.name }}" if destinations
+    unless destinations.present? && destinations[0].is_a?(HexaPDF::Type::Page)
+      raise "Pdf:fixup_internal_content_links missing page destination #{asset.assetid} #{destination_name(asset)}"
+    end
+    destinations
+  end
+
+  def link_annotation(page, annotation, linked_asset)
+    p "!!! link_annotation #{linked_asset.assetid}"
+    raise "Pdf:link_annotation not a link for assetid #{linked_asset.assetid}" unless annotation[:Subtype] == :Link
     tooltip_text = "Asset ##{linked_asset.assetid_formatted}"
     annotation[:Contents] = tooltip_text
   end
@@ -205,7 +219,6 @@ class Pdf
       canvas.fill_color(*ANNOTATION_COLOUR)
       canvas.font("Helvetica", size: 9)
       canvas.text(asset.banner_title, at: [2, page.box.height - 10])
-      #add_back_button(pdf, asset)
     end
     add_home_button(pdf)
   end
