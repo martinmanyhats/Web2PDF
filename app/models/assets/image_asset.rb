@@ -5,7 +5,7 @@ require 'open-uri'
 class ImageAsset < DataAsset
   def self.output_dir = "image"
   def self.toc_name = "Images"
-  def asset_link_type = "intasset"
+  def asset_link_type = parents.any?(DolLargeImageAsset) ? "extasset" : "intasset"
 
   def generate
     header_height = 16

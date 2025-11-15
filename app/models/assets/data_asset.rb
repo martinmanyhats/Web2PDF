@@ -31,15 +31,11 @@ class DataAsset < Asset
     "#{assetid_formatted}-#{name}"
   end
 
-  private
-
   def self.generate_toc(assets)
     p "!!! generate_toc #{toc_name} assets.count #{assets.count}"
     return if assets.empty?
     website = assets.first.website
-    toc_basename = "toc-#{toc_name.downcase.gsub(/ /, "_")}"
-    toc_filename = "#{website.output_root_dir}/html/#{toc_basename}.html"
-    File.open(toc_filename, "w") do |file|
+    File.open(toc_filename(website), "w") do |file|
       file.write("<html>\n#{website.html_head(toc_name)}\n<h1>Table of #{toc_name}</h1>")
       file.write("<table class='w2p-toc'><thead><th>#{toc_name.singularize}</th><th>Referring pages</th></thead>\n")
       assets.sort_by { it.name.downcase }.each do |asset|
@@ -47,21 +43,29 @@ class DataAsset < Asset
           referring_assets = Link.where(destination: asset).map(&:source).uniq
           referring_assets.map do |referring_asset|
             raise "DataAsset:generate_toc referring asset not ContentAsset assetid #{referring_asset.assetid}" unless referring_asset.is_a?(ContentAsset)
-            "<a href='#{referring_asset.generated_filename}'>#{referring_asset.title}</a>"
+            "<a href='intasset://#{referring_asset.assetid}:0'>#{referring_asset.title}</a>"
           end.join("<br />")
         end.join("<br />")
         file.write("<tr>")
-        file.write("<td><a href='#{website.output_root_dir}/#{output_dir}/#{asset.assetid_formatted}-#{asset.name}'>#{asset.name}</a></td>\n")
+        # file.write("<td><a href='#{website.output_root_dir}/#{output_dir}/#{asset.assetid_formatted}-#{asset.name}'>#{asset.name}</a></td>\n")
+        file.write("<td>#{asset.name} [##{asset.assetid}]</td>\n")
         file.write("<td>#{references}</td\n")
         file.write("</tr>")
       end
       file.write("</table>\n</html>\n")
       file.close
-      pdf_filename = "#{website.output_root_dir}/#{toc_basename}.pdf"
-      Browser.instance.session { Browser.instance.html_to_pdf(toc_filename, pdf_filename) }
-      pdf_relative_links(website, pdf_filename)
+      Browser.instance.session { Browser.instance.html_to_pdf(toc_filename(website), toc_pdf_filename(website)) }
+      pdf_relative_links(website, toc_pdf_filename(website))
     end
   end
+
+  def self.toc_filename(website) = "#{website.output_root_dir}/html/#{toc_basename}.html"
+
+  def self.toc_pdf_filename(website) = "#{website.output_root_dir}/#{toc_basename}.pdf"
+
+  def self.toc_basename = "toc-#{toc_name.downcase.gsub(/ /, "_")}"
+
+  private
 
   def filename_from_data_url
     raise "DataAsset:filename_from_data_url missing asset_url" if asset_urls.empty?

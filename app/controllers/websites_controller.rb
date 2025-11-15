@@ -74,7 +74,7 @@ class WebsitesController < ApplicationController
     options = {}
     options[:webroot] = params[:webroot] if params[:webroot].present?
     options[:assetids] = params[:assetids].to_s if params[:assetids].present?
-    options[:contentonly] = params[:assetids].to_s if params[:contentonly].present?
+    options[:contentonly] = params[:contentonly].to_s if params[:contentonly].present?
     options[:digest] = true if params[:digest].present?
     @website.generate_archive(options)
   end

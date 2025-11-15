@@ -8,7 +8,7 @@ class Pdf
   HOME_LINK_COLOUR = [0, 134, 178].freeze
 
   def combine_pdfs(website, options)
-    p "!!! Pdf:combine_pdfs otions #{options}"
+    p "!!! Pdf:combine_pdfs options #{options}"
     @pdf_errors = []
     Rails.logger.silence do
       @combined_pdf = HexaPDF::Document.new
@@ -18,19 +18,23 @@ class Pdf
       if options[:assetids].present?
         assetids = options[:assetids].split(",").map(&:to_i)
         content_assets = ContentAsset.where(assetid: assetids)
-        pdf_assets = PdfFileAsset.where(assetid: assetids)
+        # pdf_assets = PdfFileAsset.where(assetid: assetids)
         image_assets = ImageAsset.where(assetid: assetids)
         excel_assets = MsExcelDocumentAsset.where(assetid: assetids)
       else
         content_assets = ContentAsset
-        pdf_assets = PdfFileAsset
+        # pdf_assets = PdfFileAsset
         image_assets = ImageAsset
         excel_assets = MsExcelDocumentAsset
       end
 
       content_assets = content_assets.sitemap_ordered
-      pdf_assets = pdf_assets.publishable.order(:id)
+      # pdf_assets = pdf_assets.publishable.order(:id)
+      # Split images in to those to add to PDF and those to remain external.
       image_assets = image_assets.publishable.order(:id)
+      external_image_assets = image_assets.all.select { it.parents.any?(DolLargeImageAsset) }
+      p "!!! external_image_assets size #{external_image_assets.size}"
+      image_assets = image_assets - external_image_assets
       excel_assets = excel_assets.publishable.order(:id)
       contents_outline = @combined_pdf.outline.add_item("Contents")
 
@@ -45,19 +49,20 @@ class Pdf
       @page_number = 0
       @fixup_pages = []
       # Combine all pages, adding a PDF destination and contents entry for each.
+      p "!!! content_assets.count #{content_assets.count}"
       content_assets.each do |asset|
         raise "Pdf:combine_pdfs not ContentAsset #{asset.assetid}" unless asset.is_a?(ContentAsset)
         page_count = append_asset(asset, contents_outline)
-        # Skip due to mess of bad links.
-        skip = [ContentAsset::parish_archive].include?(asset)
-        @fixup_pages.append(*Array.new(page_count, !skip))
+        @fixup_pages.append(*Array.new(page_count, true))
         @page_number += page_count
+        raise "Pdf:combine_pdfs page count mismatch page_number #{@page_number} size #{@combined_pdf.pages.size}" if @page_number != @combined_pdf.pages.size
       end
       p "!!! last content @page_number #{@page_number}"
       p "!!! @fixup_pages.true #{@fixup_pages.select{it}.size}"
 
-      @page_number += append_assets("Images", image_assets)
-      @page_number += append_assets("Excel files", excel_assets)
+      append_assets("Images", image_assets)
+      append_assets("Excel files", excel_assets.all)
+      append_tocs(website)
       p "!!! combine_pdfs last @page_number #{@page_number}"
 
       if options[:dumpdestinations].present?
@@ -78,12 +83,11 @@ class Pdf
 
   def append_assets(name, assets)
     outline = @combined_pdf.outline.add_item(name)
-    page_count = 0
-    assets.all.each do |asset|
-      page_count += append_asset(asset, outline) { |pdf| add_banner(pdf, asset) }
+    assets.each do |asset|
+      page_count = append_asset(asset, outline) { |pdf| add_banner(pdf, asset) }
       @fixup_pages[@page_number..@page_number+page_count-1] = false
+      @page_number += page_count
     end
-    page_count
   end
 
   def append_asset(asset, outline = nil)
@@ -103,8 +107,26 @@ class Pdf
     destination = [@combined_pdf.pages[@page_number], :FitH, @combined_pdf.pages[@page_number].box(:media).top]
     @combined_pdf.destinations.add(destination_name(asset), destination)
     outline.add_item(asset.clean_short_name, destination: destination) if outline
-    # p "!!! checking for add_footer class #{asset.class.name}"
-    pdf.pages.count
+    pdf.pages.size
+  end
+
+  def append_tocs(website)
+    Asset.descendants.select { it.respond_to?(:toc_name) }.map { append_toc(website, it) }
+  end
+
+  def append_toc(website, klass)
+    p "!!! append_toc klass #{klass} @page_number #{@page_number}"
+    pdf = HexaPDF::Document.open(klass.toc_pdf_filename(website))
+    p "!!! append_toc pdf.pages.size #{pdf.pages.size}"
+    start_page_number = @page_number
+    pdf.pages.each do |page|
+      page.delete(:Thumb)
+      @combined_pdf.pages << @combined_pdf.import(page)
+      @fixup_pages[@page_number] = true
+      @page_number += 1
+    end
+    destination = [@combined_pdf.pages[start_page_number], :FitH, @combined_pdf.pages[start_page_number].box(:media).top]
+    @combined_pdf.destinations.add("w2p-destination-#{klass.toc_basename}", destination)
   end
 
   def set_initial_view
@@ -128,14 +150,15 @@ class Pdf
           url = annotation[:A][:URI]
           raise "Pdf:fixup_internal_content_links annotation is missing URI #{annotation.inspect}" if url.nil?
           url = annotation[:A][:URI]
-          p "!!! page_number #{page_number} url #{url}"
+          # p "!!! page_number #{page_number} url #{url}"
           if url.start_with?("intasset://")
             (linked_asset, source_assetid) = decode_asset_link(url)
             # Replace internal link to asset with a PDF link to destination.
+            # p "!!! intasset linked_asset #{linked_asset.assetid} #{linked_asset.short_name}"
             annotation[:A] = {S: :GoTo, D: destinations_for_asset(linked_asset)}
           elsif url.start_with?("extasset://")
-            p "!!! extasset #{url}"
             (linked_asset, _) = decode_asset_link(url)
+            # p "!!! extasset linked_asset #{linked_asset.assetid} #{linked_asset.short_name}"
             if linked_asset.is_a?(DataAsset)
               # Replace internal link to asset with a PDF link to explanatory page.
               annotation[:A] = {S: :GoTo, D: destinations_for_asset(ContentAsset.external_assets)}
@@ -143,43 +166,9 @@ class Pdf
               raise "Pdf:fixup_internal_content_links extasset is not DataAsset #{url}"
             end
           else
-            p "!!! normal URL #{url}"
+            # p "!!! normal URL #{url}"
           end
         end
-        next
-=begin
-        if annotation.is_a?(HexaPDF::Type::Annotations::Link)
-          next if annotation[:A].nil?
-          url = annotation[:A][:URI]
-          raise "Pdf:fixup_internal_content_links annotation is missing URI #{annotation.inspect}" if url.nil?
-          p "!!! page_number #{page_number} url #{url}"
-          if url.include?("__data") || url.include?("//deddingtonhistory.uk")
-            p "!!! fixup #{page_number+1}: unresolved url #{url}"
-            @pdf_errors << "#{page_number+1}: unresolved url #{url}"
-            next
-          end
-          matches = url.match(%r{\.\./(\w+)/*(\d{5})-})
-          if matches
-            linked_assetid = matches[2].to_i
-            asset = Asset.find_by(assetid: linked_assetid)
-            raise "Pdf:fixup_internal_content_links cannot find asset linked_assetid #{linked_assetid} url #{url}" if asset.nil?
-            # Replace internal link to asset with a PDF link to page destination.
-            destinations = @combined_pdf.destinations[destination_name(asset)]
-            if destinations.nil? || destinations.empty?
-              if include_pdfs
-                @pdf_errors << "#{page_number+1}: missing destinations linked asset #{asset.assetid} #{asset.short_name}"
-              else
-                # Asset must be external.
-                fixup_external_link(annotation, asset)
-              end
-              next
-            end
-            p "!!! found destinations for #{destination_name(asset)} #{destinations.map{ it.class.name }}" if destinations
-            raise "Pdf:fixup_internal_content_links missing page destination #{linked_assetid} #{destination_name(asset)}" unless destinations[0].is_a?(HexaPDF::Type::Page)
-            annotation[:A] = {S: :GoTo, D: destinations}
-          end
-        end
-=end
       end
     end
     p "!!! finished fixup"
@@ -201,6 +190,8 @@ class Pdf
     unless destinations.present? && destinations[0].is_a?(HexaPDF::Type::Page)
       raise "Pdf:fixup_internal_content_links missing page destination #{asset.assetid} #{destination_name(asset)}"
     end
+    # target_page = @combined_pdf.object(destinations[0])
+    # p "!!! found destinations index #{@combined_pdf.pages.find_index { |p| p == target_page }}" if destinations
     destinations
   end
 

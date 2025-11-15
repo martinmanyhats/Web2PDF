@@ -68,7 +68,6 @@ class Website < ApplicationRecord
         ImageAsset.generate(image_assets)
         FileAsset.generate(file_assets)
         MsExcelDocumentAsset.generate(excel_assets)
-        # MsWordDocumentAsset.generate(word_assets)
       end
     end
   end

@@ -9,7 +9,7 @@ class ContentAsset < Asset
     archived_material: 1472,
     sitemap: 15632,
     page_not_found: 13267,
-    parish_archive: 14046,
+    parish_archive_register: 14047,
     introduction: 19273,
     external_assets: 19288
   }.freeze
@@ -22,7 +22,7 @@ class ContentAsset < Asset
       assetid = link["data-w2p-assetid"]
       next if assetid.nil?
       ContentAsset.find_by(assetid: assetid) # Which is nil for non-content links eg PDF.
-    end.compact
+    end.compact.uniq
     assets.prepend(ContentAsset.introduction)
     assets.append(*additional_assets)
     p "!!! ContentAsset:sitemap_ordered size #{assets.size}"
@@ -33,7 +33,7 @@ class ContentAsset < Asset
     [ContentAsset.acrobat, ContentAsset.archived_material]
   end
 
-  def generate(head: head, html_filename: nil, pdf_filename: nil)
+  def generate(head: head, html_filename: nil, pdf_filename: nil, preface_html: nil)
     raise "ContentAsset:generate unspidered assetid #{assetid}" if status == "unspidered"
     head = website.html_head(short_name) if head.nil?
     html_filename = filename_with_assetid("html", "html") if html_filename.nil?
@@ -45,6 +45,7 @@ class ContentAsset < Asset
       @content_body["id"] = "w2p-page-#{assetid_formatted}"
       @content_body["data-w2p-assetid"] = assetid_formatted
       @content_body.first_element_child.before(Nokogiri::XML::DocumentFragment.parse(header_html))
+      @content_body.first_element_child.after(Nokogiri::XML::DocumentFragment.parse("<div class='w2p-preface'>#{preface_html}</div>")) if preface_html
       generate_html_links
       generate_iframe_links
       # generate_images # TODO larger images?
@@ -189,7 +190,7 @@ class ContentAsset < Asset
     raise "ContentAsset:generate_asset_link missing data-w2p-assetid in #{assetid} url #{url}" if link_assetid.nil?
     linked_asset = Asset.find_by(assetid: link_assetid)
     raise "ContentAsset:generate_asset_link link #{link_assetid} not found" if linked_asset.nil?
-    p "!!! generate_asset_link linked_asset #{linked_asset.inspect}"
+    # p "!!! generate_asset_link linked_asset #{linked_asset.inspect}"
     link["href"] = "#{linked_asset.asset_link_type}://#{link_assetid}:#{assetid}"
     if linked_asset.external_asset?
       # Append assetid to link contents.
@@ -198,7 +199,7 @@ class ContentAsset < Asset
   end
 
   def generate_external_link(link)
-    p "!!! generate_external_link link #{link.inspect}"
+    # p "!!! generate_external_link link #{link.inspect}"
     # TODO
   end
 

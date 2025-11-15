@@ -172,14 +172,9 @@ class Asset < ApplicationRecord
       page[:Annots]&.each do |annot|
         next unless annot[:A]
         uri = annot[:A][:URI]
-        # p "!!! uri #{uri}"
-        # next unless uri.start_with?(file_prefix)
         depth = pdf_filename.count("/")
-        # relative_prefix = "file://#{depth > 3 ? "../" : "./"}"
         relative_prefix = "#{depth > 3 ? "../" : "./"}"
-        #relative_prefix = "file://#{depth > 3 ? "../" : "./"}"
         annot[:A][:URI] = uri.sub(file_prefix, relative_prefix)
-        # p "!!! pdf_relative_links depth #{depth} before #{uri} after #{annot[:A][:URI]}"
       end
     end
     tmp_pdf_filename = "#{pdf_filename}-rel"
