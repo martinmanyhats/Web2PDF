@@ -178,10 +178,11 @@ class Website < ApplicationRecord
   end
 
   def zip_archive
-    dirs = Asset.output_dirs.join(" ")
+    dirs = %w(excel files image pdf).map { "assets/#{it}" }.join(" ")
+    p "!!! dirs #{dirs}"
     zip_filename = "/tmp/dh-#{DateTime.now.strftime('%Y%m%d')}.zip"
     File.delete(zip_filename) if File.exist?(zip_filename)
-    system("cd #{output_root_dir} && zip -r #{zip_filename} *.pdf #{dirs}")
+    system("cd #{output_root_dir} && zip -r #{zip_filename} DeddingtonHistory-*.pdf #{dirs}")
     zip_filename
   end
 
