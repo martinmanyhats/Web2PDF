@@ -126,7 +126,7 @@ class Pdf
       @page_number += 1
     end
     destination = [@combined_pdf.pages[start_page_number], :FitH, @combined_pdf.pages[start_page_number].box(:media).top]
-    @combined_pdf.destinations.add("w2p-destination-#{klass.toc_basename}", destination)
+    @combined_pdf.destinations.add(klass.toc_destination_name, destination)
   end
 
   def set_initial_view
@@ -151,12 +151,13 @@ class Pdf
           raise "Pdf:fixup_internal_content_links annotation is missing URI #{annotation.inspect}" if url.nil?
           url = annotation[:A][:URI]
           # p "!!! page_number #{page_number} url #{url}"
-          if url.start_with?("intasset://")
+          case url
+          when /^intasset:.*/
             (linked_asset, source_assetid) = decode_asset_link(url)
             # Replace internal link to asset with a PDF link to destination.
             # p "!!! intasset linked_asset #{linked_asset.assetid} #{linked_asset.short_name}"
             annotation[:A] = {S: :GoTo, D: destinations_for_asset(linked_asset)}
-          elsif url.start_with?("extasset://")
+          when /^extasset:.*/
             (linked_asset, _) = decode_asset_link(url)
             # p "!!! extasset linked_asset #{linked_asset.assetid} #{linked_asset.short_name}"
             if linked_asset.is_a?(DataAsset)
@@ -165,6 +166,19 @@ class Pdf
             else
               raise "Pdf:fixup_internal_content_links extasset is not DataAsset #{url}"
             end
+          when /^toc:.*/
+            p "!!! toc url #{url}"
+            case url.delete_prefix("toc://")
+            when "image"
+              toc_klass = ImageAsset
+            when "pdf"
+              toc_klass = PdfFileAsset
+            when "excel"
+              toc_klass = MsExcelDocumentAsset
+            else
+              raise "Pdf:fixup_internal_content_links unknown toc #{url}"
+            end
+            annotation[:A] = {S: :GoTo, D: @combined_pdf.destinations[toc_klass.toc_destination_name]}
           else
             # p "!!! normal URL #{url}"
           end
@@ -186,16 +200,14 @@ class Pdf
 
   def destinations_for_asset(asset)
     destinations = @combined_pdf.destinations[destination_name(asset)]
-    p "!!! found destinations for #{destination_name(asset)} #{destinations.map{ it.class.name }}" if destinations
+    # p "!!! found destinations for #{destination_name(asset)} #{destinations.map{ it.class.name }}" if destinations
     unless destinations.present? && destinations[0].is_a?(HexaPDF::Type::Page)
       raise "Pdf:fixup_internal_content_links missing page destination #{asset.assetid} #{destination_name(asset)}"
     end
-    # target_page = @combined_pdf.object(destinations[0])
-    # p "!!! found destinations index #{@combined_pdf.pages.find_index { |p| p == target_page }}" if destinations
     destinations
   end
 
-  def link_annotation(page, annotation, linked_asset)
+  def XXlink_annotation(page, annotation, linked_asset)
     p "!!! link_annotation #{linked_asset.assetid}"
     raise "Pdf:link_annotation not a link for assetid #{linked_asset.assetid}" unless annotation[:Subtype] == :Link
     tooltip_text = "Asset ##{linked_asset.assetid_formatted}"

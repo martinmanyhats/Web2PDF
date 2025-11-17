@@ -36,7 +36,9 @@ class DataAsset < Asset
     return if assets.empty?
     website = assets.first.website
     File.open(toc_filename(website), "w") do |file|
-      file.write("<html>\n#{website.html_head(toc_name)}\n<h1>Table of #{toc_name}</h1>")
+      home_link = "<span class='w2p-breadcrumb'><a href='intasset://#{ContentAsset.home.assetid}:0'>#{ContentAsset.home.short_name}</a></span>"
+      title = "<div class='w2p-header'><span class='w2p-title'>Table of #{toc_name}</span><span class='w2p-breadcrumbs'>#{home_link}</span></div>"
+      file.write("<html>\n#{website.html_head(toc_name)}\n#{title}\n")
       file.write("<table class='w2p-toc'><thead><th>#{toc_name.singularize}</th><th>Referring pages</th></thead>\n")
       assets.sort_by { it.name.downcase }.each do |asset|
         references = asset.asset_urls.map do |asset_url|
@@ -64,6 +66,8 @@ class DataAsset < Asset
   def self.toc_pdf_filename(website) = "#{website.output_root_dir}/#{toc_basename}.pdf"
 
   def self.toc_basename = "toc-#{toc_name.downcase.gsub(/ /, "_")}"
+
+  def self.toc_destination_name = "w2p-destination-#{toc_basename}"
 
   private
 
