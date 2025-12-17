@@ -178,28 +178,27 @@ class Website < ApplicationRecord
   end
 
   def zip_archive
-    dirs = %w(excel files image pdf).map { "assets/#{it}" }.join(" ")
-    p "!!! dirs #{dirs}"
-    zip_filename = "/tmp/DeddingtonHistory-#{DateTime.now.strftime('%Y%m%d')}.zip"
+    Asset.copy_pdfs(self, "#{output_root_dir}/assets")
+    zip_filename = "#{output_root_dir}/DeddingtonHistoryArchive-#{DateTime.now.strftime('%Y%m%d')}.zip"
     File.delete(zip_filename) if File.exist?(zip_filename)
-    system("cd #{output_root_dir} && zip -r #{zip_filename} DeddingtonHistory-*.pdf #{dirs}")
+    system("cd #{output_root_dir} && zip -r #{zip_filename} DeddingtonHistory-*.pdf assets")
     zip_filename
   end
 
   private
 
-  def canonical_url_for_url(url)
+  def canonical_url(url)
     uri = normalize(url)
     return url if uri.host != host
-    # p "!!! canonical_url_for_url #{url} uri #{uri}"
+    # p "!!! canonical_url #{url} uri #{uri}"
     # Some redirected links are direct to a PDF.
     return url if uri.path.match?(/.pdf$/i)
     asset = Asset.asset_for_uri(self, uri)
     if asset.is_a?(ContentAsset)
       asset.canonical_url
     elsif asset.is_a?(RedirectPageAsset)
-      p "!!! canonical_url_for_url redirecting to #{asset.redirect_url}"
-      canonical_url_for_url(asset.redirect_url)
+      p "!!! canonical_url redirecting to #{asset.redirect_url}"
+      canonical_url(asset.redirect_url)
     else
       url
     end

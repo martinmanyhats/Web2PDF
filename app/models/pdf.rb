@@ -207,12 +207,12 @@ class Pdf
     destinations
   end
 
-  def XXlink_annotation(page, annotation, linked_asset)
-    p "!!! link_annotation #{linked_asset.assetid}"
-    raise "Pdf:link_annotation not a link for assetid #{linked_asset.assetid}" unless annotation[:Subtype] == :Link
-    tooltip_text = "Asset ##{linked_asset.assetid_formatted}"
-    annotation[:Contents] = tooltip_text
-  end
+  # def link_annotation(page, annotation, linked_asset)
+  #   p "!!! link_annotation #{linked_asset.assetid}"
+  #   raise "Pdf:link_annotation not a link for assetid #{linked_asset.assetid}" unless annotation[:Subtype] == :Link
+  #   tooltip_text = "Asset ##{linked_asset.assetid_formatted}"
+  #   annotation[:Contents] = tooltip_text
+  # end
 
   def add_banner(pdf, asset = nil)
     # p "!!! add_banner assetid #{asset&.assetid}"

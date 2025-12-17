@@ -79,15 +79,15 @@ class WebsitesController < ApplicationController
     @website.generate_archive(options)
   end
 
-  def zip_archive
-    @zip_filename = @website.zip_archive
-  end
-
   def combine_pdfs
     options = {}
     options[:assetids] = params[:assetids].to_s if params[:assetids].present?
     options[:dumpdestinations] = params[:dumpdestinations] if params[:dumpdestinations].present?
     @combined_pdf = Pdf.instance.combine_pdfs(Website.find(1), options)
+  end
+
+  def zip_archive
+    @zip_filename = @website.zip_archive
   end
   def experiment
     @website.asset_sort_order

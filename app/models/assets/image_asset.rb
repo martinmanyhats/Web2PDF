@@ -30,9 +30,5 @@ class ImageAsset < DataAsset
     image_pdf.write(generated_filename, optimize: true)
   end
 
-  def generated_filename
-    filename_with_assetid("pdf")
-  end
-
   def banner_title = "#{name} ##{assetid}"
 end

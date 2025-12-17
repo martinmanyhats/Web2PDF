@@ -14,6 +14,7 @@ class ContentAsset < Asset
     external_assets: 19288
   }.freeze
 
+  def self.suffix = "html"
   def self.output_dir = "page"
   def asset_link_type = "intasset"
 
@@ -36,7 +37,7 @@ class ContentAsset < Asset
   def generate(head: head, html_filename: nil, pdf_filename: nil, preface_html: nil)
     raise "ContentAsset:generate unspidered assetid #{assetid}" if status == "unspidered"
     head = website.html_head(short_name) if head.nil?
-    html_filename = filename_with_assetid("html", "html") if html_filename.nil?
+    html_filename = filename_with_assetid(suffix: "html") if html_filename.nil?
     pdf_filename = generated_filename if pdf_filename.nil?
     p "!!! ContentAsset:generate assetid #{assetid} html_filename #{html_filename} pdf_filename #{pdf_filename}"
     File.open(html_filename, "wb") do |file|
@@ -135,10 +136,6 @@ class ContentAsset < Asset
 
   def sitemap_depth(link)
     link.ancestors("tr").size - 2
-  end
-
-  def generated_filename
-    filename_with_assetid("pdf")
   end
 
   def filename_base

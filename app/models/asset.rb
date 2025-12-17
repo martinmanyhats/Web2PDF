@@ -5,10 +5,11 @@ class Asset < ApplicationRecord
   has_many :asset_urls
   has_many :links, dependent: :destroy, foreign_key: "source_id"
 
-  ASSETID_FORMAT = "%05d".freeze
-  SAFE_NAME_REPLACEMENT = "_".freeze
+  ASSETID_FORMAT = "%05d"
+  SAFE_NAME_REPLACEMENT = "_"
+  WORKING_DIR = "temp"
 
-  def output_dir = self.class.output_dir
+  def output_dir = "#{WORKING_DIR}/#{self.class.output_dir}"
 
   def self.generate(assets)
     assets.each { it.generate }
@@ -90,11 +91,13 @@ class Asset < ApplicationRecord
     name.present? ? name : short_name
   end
 
-  def filename_with_assetid(suffix, subdir = nil)
+  def filename_with_assetid(suffix: "pdf")
     raise "Asset:filename_with_assetid website.output_root_dir nil" if website.output_root_dir.nil?
-    subdir.nil? ? subdir = "assets/#{output_dir}" : ""
-    "#{website.output_root_dir}/#{subdir}/#{filename_base}.#{suffix}"
+    # p "!!! filename_with_assetid #{website.output_root_dir}/#{output_dir}/#{filename_base}.#{suffix}"
+    "#{website.output_root_dir}/#{output_dir}/#{filename_base}.#{suffix}"
   end
+
+  def generated_filename = filename_with_assetid
 
   def assetid_formatted = ASSETID_FORMAT % assetid
 
@@ -140,12 +143,11 @@ class Asset < ApplicationRecord
   end
 
   def self.create_dirs(root_dir)
-    output_dirs.each { FileUtils.mkdir_p("#{root_dir}/assets/#{it}") }
-    FileUtils.mkdir_p("#{root_dir}/html")
-  end
-
-  def self.output_dirs
-    Asset.descendants.select { it.respond_to?(:output_dir) }.map { it.output_dir }.uniq
+    working_dir = "#{root_dir}/#{WORKING_DIR}"
+    FileUtils.mkdir_p(working_dir)
+    dirs = output_dirs
+    dirs.each { FileUtils.mkdir_p("#{working_dir}/#{it}") } if dirs.present?
+    FileUtils.mkdir_p("#{working_dir}/html")
   end
 
   def update_html_link(node)
@@ -182,6 +184,14 @@ class Asset < ApplicationRecord
     FileUtils.mv(tmp_pdf_filename, pdf_filename)
   end
 
+  def self.copy_pdfs(website, assets_dir)
+    FileUtils.remove_entry_secure(assets_dir) if File.exist?(assets_dir)
+    FileUtils.mkdir_p(assets_dir)
+    Dir.glob("#{website.output_root_dir}/#{WORKING_DIR}/**/*.pdf").each do |pdf_path|
+      FileUtils.cp(pdf_path, assets_dir)
+    end
+  end
+
   private
 
   def self.stream_lines_for_url(url)
@@ -204,5 +214,9 @@ class Asset < ApplicationRecord
         end
       end
     end
+  end
+
+  def self.output_dirs
+    Asset.descendants.select { it.respond_to?(:output_dir) }.map { it.output_dir }.uniq
   end
 end

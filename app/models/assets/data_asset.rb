@@ -11,7 +11,7 @@ class DataAsset < Asset
 
   def generate
     "!!! DataAsset:generate assetid #{assetid}"
-    copy_filename = "#{website.output_root_dir}/assets/#{output_dir}/#{assetid_formatted}-#{filename_from_data_url}"
+    copy_filename = "#{website.output_root_dir}/#{output_dir}/#{assetid_formatted}-#{filename_from_data_url}"
     p "!!! DataAsset:generate url #{url} copy_filename #{copy_filename}"
     IO.copy_stream(URI.open("#{url}"), copy_filename)
     copy_filename
@@ -61,9 +61,9 @@ class DataAsset < Asset
     end
   end
 
-  def self.toc_filename(website) = "#{website.output_root_dir}/html/#{toc_basename}.html"
+  def self.toc_filename(website) = "#{website.output_root_dir}/#{WORKING_DIR}/html/#{toc_basename}.html"
 
-  def self.toc_pdf_filename(website) = "#{website.output_root_dir}/#{toc_basename}.pdf"
+  def self.toc_pdf_filename(website) = "#{website.output_root_dir}/#{WORKING_DIR}/#{toc_basename}.pdf"
 
   def self.toc_basename = "toc-#{toc_name.downcase.gsub(/ /, "_")}"
 
