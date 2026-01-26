@@ -4,11 +4,12 @@ TODO
 
 ~~- include PDFs from website~~
 ~~- what to do with attached Word/Excel files~~
-- provide Excel files
-- check https://www.deddingtonhistory.uk/buildings/windmillcentre
-- encoding for asset names
+- landscape for Excel files
+~~- check https://www.deddingtonhistory.uk/buildings/windmillcentre~~
+~~- encoding for asset names~~
+- video assets
 - PDF outline for PDFs
-- - review tmp/pdf_duplicates. tmp/ignored_links
+- review tmp/pdf_duplicates, tmp/ignored_links
 
 Code added to mysource_matrix/core/include/asset.inc:
 

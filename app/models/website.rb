@@ -53,6 +53,7 @@ class Website < ApplicationRecord
         content_assets = ContentAsset.sitemap_ordered
         pdf_file_assets = PdfFileAsset.publishable
         image_assets = ImageAsset.publishable
+        video_file_assets = VideoFileAsset.publishable
         file_assets = FileAsset.publishable
         excel_assets = MsExcelDocumentAsset.publishable
         not_ordered = ContentAsset.publishable - content_assets
@@ -66,6 +67,7 @@ class Website < ApplicationRecord
       unless options[:contentonly]
         PdfFileAsset.generate(pdf_file_assets)
         ImageAsset.generate(image_assets)
+        VideoFileAsset.generate(video_file_assets)
         FileAsset.generate(file_assets)
         MsExcelDocumentAsset.generate(excel_assets)
       end
