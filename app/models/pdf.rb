@@ -171,6 +171,8 @@ class Pdf
             case url.delete_prefix("toc://")
             when "image"
               toc_klass = ImageAsset
+            when "video"
+              toc_klass = VideoFileAsset
             when "pdf"
               toc_klass = PdfFileAsset
             when "excel"
