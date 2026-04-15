@@ -12,10 +12,14 @@ class ImageAsset < DataAsset
     image_pdf = HexaPDF::Document.new
     image_path = url
     p "!!! ImageAsset:generate image_path #{image_path}"
-    if File.extname(image_path).downcase == ".gif"
-      img = Vips::Image.new_from_buffer(URI.open(image_path, &:read), "")
-      image_path = "#{Dir.tmpdir}/#{filename_base.sub(%r{gif$}i, "png")}"
-      img.write_to_file(image_path)
+    begin
+      if File.extname(image_path).casecmp?(".gif")
+        img = Vips::Image.new_from_buffer(URI.open(image_path, &:read), "")
+        image_path = "#{Dir.tmpdir}/#{filename_base.sub(%r{gif$}i, "png")}"
+        img.write_to_file(image_path)
+      end
+    rescue => e
+      Rails.logger.error "Error converting GIF to PNG: #{e.message}"
     end
     image = image_pdf.images.add(URI.open(image_path))
     canvas_width = [image.info.width, 300].max # Allow enough for header.

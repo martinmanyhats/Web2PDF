@@ -1,5 +1,5 @@
 class WebsitesController < ApplicationController
-  before_action :set_website, only: %i[ show edit update destroy spider generate_archive zip_archive combine_pdfs experiment ]
+  before_action :set_website, only: %i[ show edit update destroy spider generate_archive zip_archive combine_pdfs generate_export ]
 
   # GET /websites or /websites.json
   def index
@@ -89,8 +89,23 @@ class WebsitesController < ApplicationController
   def zip_archive
     @zip_filename = @website.zip_archive
   end
-  def experiment
-    @website.asset_sort_order
+
+  def generate_export
+    options = {format: "csv"}
+    options[:format] = params[:format].to_s if params[:format].present?
+    @website.generate_export(options)
+    render :generate_export, formats: [:html]
+  end
+
+  def wptest
+    wordpress = Wordpress.new(
+      username: Rails.application.credentials.dig(:wordpress, :username),
+      application_password: Rails.application.credentials.dig(:wordpress, :app_password)
+    )
+
+    @result = []
+    @result[0] = wordpress.upload_media("/home/martin/src/Web2PDF/tmp/test.jpg")
+    @result[1] = wordpress.create_page(title: "Test page", slug: 'test-page', content: "hello world")
   end
 
   private

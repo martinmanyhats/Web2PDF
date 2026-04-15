@@ -88,29 +88,85 @@ class ContentAsset < Asset
 
   def extract_content_info
     # p "!!! extract_content_info assetid #{assetid}"
-    url = document.css("link[rel=canonical]").first["href"]
-    raise "Asset:extract_content_info missing canonical URL #{assetid}" if url.nil?
-    self.canonical_url = url
-    timestamp = document.css("meta[name='squiz-updated_iso8601']").first
-    raise "Asset:extract_content_info missing timestamp #{assetid}" if timestamp.nil?
-    self.squiz_updated = DateTime.iso8601(timestamp["content"])
-    main_content = document.css("#main-content")
-    raise "Asset:extract_content_info missing main-content #{assetid}" if main_content.nil?
-    self.content_html = main_content.inner_html
-    breadcrumbs = document.css("#breadcrumbs")
-    self.breadcrumbs_html = breadcrumbs unless breadcrumbs.nil?
+
+    source_url = asset_urls.first&.url
+
+    canonical_href =
+      document.at_css('link[rel="canonical"]')&.[]("href") ||
+      document.at_css('meta[property="og:url"]')&.[]("content") ||
+      source_url
+
+    if canonical_href.blank?
+      raise "ContentAsset:extract_content_info missing canonical URL assetid #{assetid} source_url #{source_url.inspect}"
+    end
+    self.canonical_url = canonical_href
+
+    timestamp_content = document.at_css('meta[name="squiz-updated_iso8601"]')&.[]("content")
+    if timestamp_content.blank?
+      raise "ContentAsset:extract_content_info missing timestamp assetid #{assetid} canonical #{canonical_url.inspect}"
+    end
+
+    begin
+      self.squiz_updated = DateTime.iso8601(timestamp_content)
+    rescue ArgumentError => e
+      raise "ContentAsset:extract_content_info invalid timestamp assetid #{assetid} value #{timestamp_content.inspect} (#{e.class}: #{e.message})"
+    end
+
+    main_content_node = document.at_css("#main-content")
+    if main_content_node.nil?
+      raise "ContentAsset:extract_content_info missing #main-content assetid #{assetid} canonical #{canonical_url.inspect}"
+    end
+    self.content_html = main_content_node.inner_html
+
+    breadcrumbs_node = document.at_css("#breadcrumbs")
+    self.breadcrumbs_html = breadcrumbs_node&.to_html
   end
 
   def document
     @_document ||=
       begin
-        uri = URI.parse("#{asset_urls.first.url}")
-        # p ">>>>>>>>>>>>>>>>>>>> document HTTParty.get uri #{uri}"
-        response = HTTParty.get(uri, {
-          headers: Website.http_headers,
-        })
-        # TODO: error checking, retry
-        Nokogiri::HTML(response.body)
+        source_url = asset_urls.first&.url
+        raise "ContentAsset:document missing asset_url assetid #{assetid}" if source_url.blank?
+
+        uri = URI.parse(source_url)
+
+        attempts = 0
+        begin
+          attempts += 1
+
+          response = HTTParty.get(uri, headers: Website.http_headers)
+          unless response.respond_to?(:code)
+            raise "ContentAsset:document unexpected response type assetid #{assetid} url #{source_url.inspect} response_class #{response.class.name}"
+          end
+          unless response.code.between?(200, 299)
+            raise "ContentAsset:document HTTP #{response.code} assetid #{assetid} url #{source_url.inspect}"
+          end
+
+          content_type =
+            response.headers&.[]("content-type")&.to_s&.downcase ||
+            response.headers&.[]("Content-Type")&.to_s&.downcase
+
+          if content_type.present?
+            unless content_type.include?("text/html") || content_type.include?("application/xhtml+xml")
+              raise "ContentAsset:document unexpected content-type #{content_type.inspect} assetid #{assetid} url #{source_url.inspect}"
+            end
+          end
+
+          body = response.body.to_s
+          if body.blank?
+            raise "ContentAsset:document empty body assetid #{assetid} url #{source_url.inspect}"
+          end
+
+          Nokogiri::HTML(body)
+        rescue Net::OpenTimeout, Net::ReadTimeout, Timeout::Error,
+          Errno::ECONNRESET, Errno::ECONNREFUSED, SocketError => e
+          if attempts < 2
+            Rails.logger.warn("ContentAsset:document retrying assetid #{assetid} url #{source_url.inspect} due_to #{e.class}: #{e.message}")
+            sleep 2.0
+            retry
+          end
+          raise "ContentAsset:document request failed assetid #{assetid} url #{source_url.inspect} (#{e.class}: #{e.message})"
+        end
       end
   end
 
@@ -119,10 +175,12 @@ class ContentAsset < Asset
     super
   end
 
+=begin
   def sort_order
     sitemap_links = spiderable_link_elements(Nokogiri::HTML(Asset.sitemap.content_html))
     @sitemap_asset_depth_by_assetid = {}
     sitemap_links.each do |link|
+      # Preferred ordering is based on
       depth = sitemap_depth(link)
       assetid = link["data-w2p-assetid"]
       #p "!!! depth #{depth} assetid #{assetid}"
@@ -137,6 +195,7 @@ class ContentAsset < Asset
   def sitemap_depth(link)
     link.ancestors("tr").size - 2
   end
+=end
 
   def filename_base
     raise "ContentAsset:filename_base name missing" if name.nil?
@@ -185,6 +244,7 @@ class ContentAsset < Asset
     raise "ContentAsset:generate_asset_link url missing in assetid #{assetid}" if url.blank?
     link_assetid = link.attributes["data-w2p-assetid"]&.value
     raise "ContentAsset:generate_asset_link missing data-w2p-assetid in #{assetid} url #{url}" if link_assetid.nil?
+    # Use find_by rather than where as there can only be a single linked asset.
     linked_asset = Asset.find_by(assetid: link_assetid)
     raise "ContentAsset:generate_asset_link link #{link_assetid} not found" if linked_asset.nil?
     # p "!!! generate_asset_link linked_asset #{linked_asset.inspect}"

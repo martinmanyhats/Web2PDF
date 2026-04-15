@@ -39,7 +39,7 @@ class Browser
   def browser
     @browser ||= Ferrum::Browser.new(
       browser_options: {
-        timeout: 90,
+        timeout: 180,
         protocol_timeout: 60,
         with_root: true,
         "user-agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36"

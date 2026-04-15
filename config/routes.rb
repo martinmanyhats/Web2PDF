@@ -5,8 +5,9 @@ Rails.application.routes.draw do
       get "spider"
       get "generate_archive"
       get "zip_archive"
-      get "experiment"
       get "combine_pdfs"
+      get "generate_export"
+      get "wptest"
     end
   end
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html

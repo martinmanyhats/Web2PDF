@@ -4,6 +4,8 @@ class Asset < ApplicationRecord
   belongs_to :website
   has_many :asset_urls
   has_many :links, dependent: :destroy, foreign_key: "source_id"
+  has_many :incoming_links, class_name: "Link", foreign_key: "destination_id", dependent: :destroy
+  has_many :parents, through: :incoming_links, source: :source
 
   ASSETID_FORMAT = "%05d"
   SAFE_NAME_REPLACEMENT = "_"
@@ -61,9 +63,11 @@ class Asset < ApplicationRecord
     klass
   end
 
+=begin
   def parents
     Link.where(destination: self).map(&:source)
   end
+=end
 
   def safe_name
     sname = name.present? ? name : short_name

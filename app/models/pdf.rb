@@ -18,24 +18,23 @@ class Pdf
       if options[:assetids].present?
         assetids = options[:assetids].split(",").map(&:to_i)
         content_assets = ContentAsset.where(assetid: assetids)
-        # pdf_assets = PdfFileAsset.where(assetid: assetids)
         image_assets = ImageAsset.where(assetid: assetids)
         excel_assets = MsExcelDocumentAsset.where(assetid: assetids)
       else
         content_assets = ContentAsset
-        # pdf_assets = PdfFileAsset
         image_assets = ImageAsset
         excel_assets = MsExcelDocumentAsset
       end
 
       content_assets = content_assets.sitemap_ordered
-      # pdf_assets = pdf_assets.publishable.order(:id)
-      # Split images in to those to add to PDF and those to remain external.
-      image_assets = image_assets.publishable.order(:id)
-      external_image_assets = image_assets.all.select { it.parents.any?(DolLargeImageAsset) }
+      image_assets = image_assets.publishable
+                                 .includes(:parents)
+                                 .order(:id)
+      external_image_assets = image_assets.select { |a| a.parents.any? { |p| p.is_a?(DolLargeImageAsset) } }
       p "!!! external_image_assets size #{external_image_assets.size}"
       image_assets = image_assets - external_image_assets
       excel_assets = excel_assets.publishable.order(:id)
+
       contents_outline = @combined_pdf.outline.add_item("Contents")
 
       not_in_sitemap = ContentAsset.where(status: "spidered") - content_assets

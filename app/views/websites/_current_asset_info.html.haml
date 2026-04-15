@@ -8,7 +8,7 @@
         ContentAsset: #{ContentAsset.publishable.count} of #{ContentAsset.count}
       - DataAsset.subclasses.sort_by(&:name).each do |subclass|
         %li
-          #{subclass.name}: #{subclass.publishable.count} of #{subclass.count}
+          #{subclass.name}: #{subclass.count_with_subclasses("linked")} of #{subclass.count_with_subclasses}
       - if asset.present?
         %li
           URL: #{asset.canonical_url}
