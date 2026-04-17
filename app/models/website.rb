@@ -2,11 +2,11 @@
 
 class Website < ApplicationRecord
   has_many :assets, dependent: :destroy
-
+  has_many :standard_page_assets, -> { where(type: "StandardPageAsset") }, class_name: "Asset"
+  has_many :image_assets, -> { where(type: "ImageAsset") }, class_name: "Asset"
+  has_many :pdf_assets, -> { where(type: "PdfFileAsset") }, class_name: "Asset"
   broadcasts_refreshes
   after_update_commit -> { broadcast_refresh_later }
-
-  # FileAsset = Struct.new(:assetid, :short_name, :filename, :url, :digest)
 
   def spider(options = {})
     p "!!! Website::spider options #{options.inspect} #{inspect}"
@@ -213,8 +213,9 @@ class Website < ApplicationRecord
       return fetch_head_for_uri(URI.parse(response['location']), limit - 1)
     when nil
       raise "Website:fetch_head_for_uri nil"
+    else
+      raise "Website:fetch_head_for_uri unexpected HTTP code #{response.code}"
     end
-    raise "Website:fetch_head_for_uri unexpected HTTP code #{response.code}"
   end
 
   def html_head(title)

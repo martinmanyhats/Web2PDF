@@ -175,28 +175,6 @@ class ContentAsset < Asset
     super
   end
 
-=begin
-  def sort_order
-    sitemap_links = spiderable_link_elements(Nokogiri::HTML(Asset.sitemap.content_html))
-    @sitemap_asset_depth_by_assetid = {}
-    sitemap_links.each do |link|
-      # Preferred ordering is based on
-      depth = sitemap_depth(link)
-      assetid = link["data-w2p-assetid"]
-      #p "!!! depth #{depth} assetid #{assetid}"
-      @sitemap_asset_depth_by_assetid[assetid] = depth
-    end
-    p "!!! sitemap_asset_depth_by_assetid.size #{@sitemap_asset_depth_by_assetid.size}"
-    sitemap_assetids = @sitemap_asset_depth_by_assetid.keys
-    non_sitemap_content_assetids = ContentAsset.where(status: "scraped").pluck(:assetid) - sitemap_assetids
-    raise "ContentAsset:sort_order non_sitemap_content_assetids #{non_sitemap_content_assetids.join(" ")}" unless non_sitemap_content_assetids.empty?
-  end
-
-  def sitemap_depth(link)
-    link.ancestors("tr").size - 2
-  end
-=end
-
   def filename_base
     raise "ContentAsset:filename_base name missing" if name.nil?
     "#{assetid_formatted}-#{name.present? ? "#{safe_name}" : "untitled"}"

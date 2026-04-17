@@ -6,6 +6,7 @@ class Asset < ApplicationRecord
   has_many :links, dependent: :destroy, foreign_key: "source_id"
   has_many :incoming_links, class_name: "Link", foreign_key: "destination_id", dependent: :destroy
   has_many :parents, through: :incoming_links, source: :source
+  has_one :wordpress_item, dependent: :destroy
 
   ASSETID_FORMAT = "%05d"
   SAFE_NAME_REPLACEMENT = "_"
@@ -95,13 +96,13 @@ class Asset < ApplicationRecord
     name.present? ? name : short_name
   end
 
-  def filename_with_assetid(suffix: "pdf")
+  def filename_with_assetid(suffix: nil)
     raise "Asset:filename_with_assetid website.output_root_dir nil" if website.output_root_dir.nil?
     # p "!!! filename_with_assetid #{website.output_root_dir}/#{output_dir}/#{filename_base}.#{suffix}"
-    "#{website.output_root_dir}/#{output_dir}/#{filename_base}.#{suffix}"
+    "#{website.output_root_dir}/#{output_dir}/#{filename_base}#{suffix ? ".#{suffix}" : ""}"
   end
 
-  def generated_filename = filename_with_assetid
+  def generated_filename = filename_with_assetid(suffix: "pdf")
 
   def assetid_formatted = ASSETID_FORMAT % assetid
 

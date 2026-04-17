@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class WebsitesController < ApplicationController
   before_action :set_website, only: %i[ show edit update destroy spider generate_archive zip_archive combine_pdfs generate_export ]
 
@@ -102,10 +104,11 @@ class WebsitesController < ApplicationController
       username: Rails.application.credentials.dig(:wordpress, :username),
       application_password: Rails.application.credentials.dig(:wordpress, :app_password)
     )
-
-    @result = []
-    @result[0] = wordpress.upload_media("/home/martin/src/Web2PDF/tmp/test.jpg")
-    @result[1] = wordpress.create_page(title: "Test page", slug: 'test-page', content: "hello world")
+    website = Website.find(1)
+    p "image_assets.count #{website.image_assets.count} publishable #{ImageAsset.publishable.count}"
+    wordpress.upload_image_assets(ImageAsset.publishable.first(2))
+    p "standard_page_assets.count #{website.standard_page_assets.count}"
+    #wordpress.upload_standard_page_assets(StandardPageAsset.publishable.first(2))
   end
 
   private
