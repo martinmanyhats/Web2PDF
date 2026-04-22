@@ -92,13 +92,13 @@ class Wordpress
     p "!!! match[:id] #{match[:id]}"
     asset = Asset.find_by(assetid: match[:id])
     raise "Wordpress:upload_image missing asset #{squiz_url}" unless asset
-    response = upload_media_asset(squiz_url, title: asset.short_name, alt: alt)
+    response = upload_media_asset(squiz_url, title: asset.short_name, alt: alt, assetid: asset.assetid)
     p "!!! asset uploaded #{asset.assetid} response #{response.inspect}"
     WordpressItem.create!(itemid: response["id"].to_i, slug: response["slug"], url: response["guid"]["raw"], squiz_url: squiz_url)
   end
 
-  def upload_media_asset(url, title: nil, alt: nil)
-    raise "Wordpress:upload_media_asset missing asset url" unless url
+  def upload_media_asset(url, title: nil, alt: nil, assetid: nil)
+    raise "Wordpress:upload_media_asset missing url" unless url
     begin
       p "upload_media #{url} mime_type #{mime_type(url)}"
       data = StringIO.new(URI.open(url).read)
@@ -115,12 +115,24 @@ class Wordpress
       payload[:title] = title if title
       payload[:alt_text] = alt if alt
       payload[:caption] = alt if alt
-      response = connection.post("media", payload)
-      response = handle_response(response)
+      p "!!! payload #{payload.inspect}"
+      upload_response = connection.post("media", payload)
+      upload_response = handle_response(upload_response)
     rescue => e
       raise "Wordpress:upload_media_asset unable to upload #{url}: #{e.inspect}"
     end
-    response
+    if assetid
+      begin
+        payload = {
+          post_id: upload_response["id"],
+          assetid: assetid
+        }
+        connection.post("/wp-json/squiz/v2/asset", payload)
+      rescue => e
+        raise "Wordpress:upload_media_asset unable to set assetid #{url}: #{e.inspect}"
+      end
+    end
+    upload_response
   end
 
   private
@@ -151,7 +163,7 @@ class Wordpress
     end
   end
 
-  def format_for_wordpress(website, content)
+  def XXformat_for_wordpress(website, content)
     doc = Nokogiri::HTML(content)
     doc.css("img").each do |img|
       src = img.attr("src")
