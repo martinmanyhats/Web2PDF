@@ -1,5 +1,5 @@
 class WebsitesController < ApplicationController
-  before_action :set_website, only: %i[ show edit update destroy spider generate_archive zip_archive combine_pdfs experiment ]
+  before_action :set_website, only: %i[ show edit update destroy spider generate_archive zip_archive combine_pdfs wordpress ]
 
   # GET /websites or /websites.json
   def index
@@ -89,8 +89,24 @@ class WebsitesController < ApplicationController
   def zip_archive
     @zip_filename = @website.zip_archive
   end
-  def experiment
-    @website.asset_sort_order
+
+  def generate_export
+    options = {format: "csv"}
+    options[:format] = params[:format].to_s if params[:format].present?
+    @website.generate_export(options)
+    render :generate_export, formats: [:html]
+  end
+
+  def wordpress
+    wordpress = Wordpress.new(
+      username: Rails.application.credentials.dig(:wordpress, :username),
+      application_password: Rails.application.credentials.dig(:wordpress, :app_password)
+    )
+    # p "image_assets.count #{@website.image_assets.count} publishable #{ImageAsset.publishable.count}"
+    # wordpress.upload_image_assets(@website, @website.image_assets.publishable)
+    p "content_assets.count #{@website.content_assets.count}"
+    wordpress.upload_content(@website, ContentAsset.where(assetid: 153))
+    # wordpress.upload_content(@website, @website.content_assets.publishable.first(2))
   end
 
   private

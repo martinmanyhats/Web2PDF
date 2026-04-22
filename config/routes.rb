@@ -7,6 +7,8 @@ Rails.application.routes.draw do
       get "zip_archive"
       get "experiment"
       get "combine_pdfs"
+      get "generate_export"
+      get "wordpress"
     end
   end
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html

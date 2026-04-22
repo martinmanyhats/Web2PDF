@@ -104,6 +104,14 @@ GEM
     erubis (2.7.0)
     et-orbi (1.4.0)
       tzinfo
+    faraday (2.14.1)
+      faraday-net_http (>= 2.0, < 3.5)
+      json
+      logger
+    faraday-multipart (1.2.0)
+      multipart-post (~> 2.0)
+    faraday-net_http (3.4.2)
+      net-http (~> 0.5)
     fast_excel (0.5.0)
       ffi (> 1.9, < 2)
     ferrum (0.17.1)
@@ -200,6 +208,9 @@ GEM
     msgpack (1.8.0)
     multi_xml (0.8.1)
       bigdecimal (>= 3.1, < 5)
+    multipart-post (2.4.1)
+    net-http (0.9.1)
+      uri (>= 0.11.1)
     net-imap (0.6.2)
       date
       net-protocol
@@ -420,7 +431,10 @@ DEPENDENCIES
   addressable
   bootsnap
   brakeman
+  csv
   debug
+  faraday
+  faraday-multipart
   fast_excel
   ferrum_pdf (~> 3.0)
   haml-rails (~> 3.0)

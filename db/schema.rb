@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2025_10_22_131409) do
+ActiveRecord::Schema[8.1].define(version: 2026_04_15_173305) do
   create_table "asset_urls", force: :cascade do |t|
     t.integer "asset_id", null: false
     t.datetime "created_at", null: false
@@ -75,6 +75,17 @@ ActiveRecord::Schema[8.1].define(version: 2025_10_22_131409) do
     t.string "remove_scripts", default: ""
     t.datetime "updated_at", null: false
     t.string "url", null: false
+  end
+
+  create_table "wordpress_items", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.integer "itemid", null: false
+    t.string "slug", null: false
+    t.string "squiz_url", null: false
+    t.datetime "updated_at", null: false
+    t.string "url", null: false
+    t.index ["itemid"], name: "index_wordpress_items_on_itemid"
+    t.index ["squiz_url"], name: "index_wordpress_items_on_squiz_url", unique: true
   end
 
   add_foreign_key "asset_urls", "assets"

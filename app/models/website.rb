@@ -2,6 +2,9 @@
 
 class Website < ApplicationRecord
   has_many :assets, dependent: :destroy
+  has_many :content_assets
+  has_many :image_assets
+  has_many :pdf_assets
 
   broadcasts_refreshes
   after_update_commit -> { broadcast_refresh_later }
@@ -70,6 +73,50 @@ class Website < ApplicationRecord
         VideoFileAsset.generate(video_file_assets)
         FileAsset.generate(file_assets)
         MsExcelDocumentAsset.generate(excel_assets)
+      end
+    end
+  end
+
+  def generate_export(options)
+    p "!!! Website:generate_export options #{options.inspect}"
+    format = options[:format]
+    FileUtils.remove_entry_secure(output_root_dir) if File.exist?(output_root_dir)
+    Asset.create_dirs(output_root_dir)
+    content_assets = ContentAsset.sitemap_ordered
+    pdf_file_assets = PdfFileAsset.publishable
+    image_assets = ImageAsset.publishable
+    video_file_assets = VideoFileAsset.publishable
+    file_assets = FileAsset.publishable
+    excel_assets = MsExcelDocumentAsset.publishable
+    not_ordered = ContentAsset.publishable - content_assets
+    if not_ordered.any?
+      not_ordered.each { p ">>> generate_export not_ordered #{it.assetid} #{it.short_name}" }
+      raise "Website:generate_export assets missing from sitemap"
+    end
+
+    export_filename = "#{output_root_dir}/content.#{format}"
+    case format
+    when "csv"
+      headers = ["assetid", "short_name", "url", "type", "breadcrumbs", "content"]
+      p ">>> CSV #{csv_filename}"
+      CSV.open(export_filename, "w", headers: headers, write_headers: true) do |csv|
+        content_assets.each do |asset|
+          csv << [asset.assetid, asset.short_name, asset.url, asset.type, asset.breadcrumbs_html, asset.content_html]
+        end
+      end
+    when "json"
+      export = content_assets.map do |asset|
+        {
+          assetid: asset.assetid,
+          short_name: asset.short_name,
+          url: asset.url,
+          type: asset.type,
+          breadcrumbs: asset.breadcrumbs_html,
+          content: asset.content_html
+        }
+      end
+      File.open(export_filename, "w") do |file|
+        file.write(JSON.pretty_generate(export))
       end
     end
   end
