@@ -1,5 +1,5 @@
 body,
-h2,
+h1, h2, h3, h4, h5, h6
 p,
 li {
     font-family: system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
@@ -9,11 +9,13 @@ li {
 }
 
 /* Headings */
-h2 {
+h1, .wp-block-post-title {
     font-size: 120%;
     font-weight: 500;
     position: relative;
     padding: 6px 0 6px 10px;
+    color: #0086B2;
+    background-color: #EDE5D3;
 }
 
 .wp-block-site-title {

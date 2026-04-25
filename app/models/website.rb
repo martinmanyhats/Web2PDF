@@ -3,6 +3,7 @@
 class Website < ApplicationRecord
   has_many :assets, dependent: :destroy
   has_many :content_assets
+  has_many :file_assets
   has_many :image_assets
   has_many :pdf_file_assets
 

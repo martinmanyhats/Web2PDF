@@ -54,6 +54,7 @@ gem 'ruby-vips'
 gem 'csv'
 gem 'faraday'
 gem 'faraday-multipart'
+gem 'faraday-retry'
 
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem

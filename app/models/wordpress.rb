@@ -175,11 +175,19 @@ class Wordpress
   end
 
   def connection
+    retry_options = {
+      max: 3,
+      interval: 0.5,
+      interval_randomness: 0.5,
+      backoff_factor: 2,
+      retry_block: -> (env:, options:, retry_count:, exception:, will_retry_in:) { p ">>>>>> retrying #{retry_count} after #{exception.inspect}" }
+    }
     conn = Faraday.new(url: WP_API_BASE) do |f|
       f.request :multipart
       f.request :url_encoded
       f.adapter Faraday.default_adapter
       f.headers
+      f.request :retry, retry_options
     end
     conn.headers["Authorization"] = @auth_header
     conn
