@@ -1,0 +1,97 @@
+body,
+h2,
+p,
+li {
+    font-family: system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 400;
+}
+
+/* Headings */
+h2 {
+    font-size: 120%;
+    font-weight: 500;
+    position: relative;
+    padding: 6px 0 6px 10px;
+}
+
+.wp-block-site-title {
+    font-size: 120%;
+    color: #0086B2;
+}
+
+/* Asset listing */
+.asset-listing {
+    text-wrap: pretty;
+}
+
+.asset-listing li {
+    position: relative;
+    list-style: none;
+    display: block;
+    max-width: 100%;
+    padding: 6px 0 6px 14px;
+    overflow-wrap: break-word;
+    word-break: normal;
+    white-space: normal;
+}
+
+.asset-listing li::marker {
+    content: "";
+}
+
+.asset-listing a {
+    font: inherit;
+    color: inherit;
+    display: inline;
+    white-space: normal;
+}
+
+/* Decorative lines */
+.asset-listing li::before,
+.asset-listing li::after,
+h2::before,
+h2::after {
+    content: "";
+    position: absolute;
+    background: #ffdaa7;
+}
+
+.asset-listing li::before {
+    left: 0;
+    top: -4px;
+    bottom: 0;
+    width: 1px;
+}
+
+.asset-listing li::after {
+    top: 0;
+    left: -4px;
+    height: 1px;
+    width: 40px;
+}
+
+h2::before {
+    left: 0;
+    top: -4px;
+    bottom: 0;
+    width: 2px;
+}
+
+h2::after {
+    top: 0;
+    left: -4px;
+    height: 2px;
+    width: 56px;
+}
+
+/* Superscript */
+sup {
+    font-size: 0.75em;
+    vertical-align: baseline;
+    position: relative;
+    top: -0.4em;
+    line-height: 0;
+    font-family: inherit;
+}

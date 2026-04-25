@@ -15,21 +15,13 @@ class Wordpress
     end
   end
 
-  def XXupload_image(website, squiz_url, alt: nil)
-    match = squiz_url.match(DataAsset::URL_REGEX)
-    raise "Wordpress:upload_image malformed url #{squiz_url}" if match[:id].blank? or match[:file].blank?
-    p "!!! match[:id] #{match[:id]}"
-    asset = Asset.find_by(assetid: match[:id])
-    raise "Wordpress:upload_image missing asset #{squiz_url}" unless asset
-    response = upload_media_asset(website, squiz_url, title: asset.short_name, alt: alt, assetid: asset.assetid)
-    p "!!! asset uploaded #{asset.assetid} response #{response.inspect}"
-    WordpressItem.create!(itemid: response["id"].to_i, slug: response["slug"], url: response["link"], squiz_url: squiz_url)
+  def upload_file_assets(assets)
+    assets.each do |asset|
+      upload_media_asset(asset)
+    end
   end
 
   def upload_content_pages(website, assets)
-    p "upload_content_pages assetid #{assets.first(5).inspect}"
-    # host_regex = %r{#{website.url}/}
-    # p "host_regex #{host_regex}"
     assets.each do |asset|
       updated_doc = process_linked_assets(asset)
       create_page(asset, content: updated_doc.to_s)
@@ -89,11 +81,15 @@ class Wordpress
       p "!!! link #{squiz_url}"
       raise "Wordpress:update_internal_links blank href #{link.inspect}" if squiz_url.blank?
       if squiz_url =~ /\.(jpg,jpeg,gif,png)$/
-        raise "Wordpress:update_internal_links link to image #{content_asset.assetid} #{squiz_url}"
+        raise "Wordpress:update_internal_links found link to image #{content_asset.assetid} #{squiz_url}"
       else
         p "<<<<< href squiz_url #{squiz_url}"
         asset = Asset.asset_for_uri(content_asset.website, squiz_url)
         if asset
+          while asset.is_a?(RedirectPageAsset)
+            asset = Asset.asset_for_uri(content_asset.website, asset.redirect_url)
+            p "@@@ redirecting to #{asset.assetid} #{asset.url}"
+          end
           p "!!! assetid #{asset.assetid}"
           # Link to what the Wordpress URL will be.
           link["href"] = "#{WP_BASE}/#{wordpress_slug(asset)}"
@@ -133,13 +129,15 @@ class Wordpress
   end
 
   def create_page(asset, content: nil, status: "publish")
+    content = asset.content_html if content.nil?
+    content = extract_body(content)
     p "!!! create_page assetid #{asset.assetid} canonical_url #{asset.canonical_url}"
     begin
       slug = wordpress_slug(asset)
       payload = {
         title: asset.title,
         slug: slug,
-        content: content.nil? ? asset.content_html : content,
+        content: content,
         status: status
       }
       response = connection.post("pages") do |req|
@@ -213,5 +211,56 @@ class Wordpress
                .gsub(/\A-+|-+\z/, "")
     p "!!! slug #{slug}"
     slug
+  end
+
+  def extract_body(html, remove_sup: false)
+    doc = Nokogiri::HTML(html)
+
+    body = doc.at("body")
+    raise "Wordpress:extract_body missing body" unless body
+
+    # =========================================================
+    # 1. STABILISE ANCHOR → TEXT BOUNDARIES
+    # =========================================================
+    #
+    # Insert a normal space after <a> elements inside list items.
+    # This forces Chrome to break the text run safely.
+    #
+
+    body.css("li a").each do |a|
+      next_sibling = a.next_sibling
+
+      # Only add space if not already present
+      unless next_sibling&.text? && next_sibling.text.start_with?(" ")
+        a.add_next_sibling(Nokogiri::XML::Text.new(" ", doc))
+      end
+    end
+
+    # =========================================================
+    # 2. OPTIONAL: FLATTEN ORDINAL SUPERSCRIPTS
+    # =========================================================
+
+    if remove_sup
+      body.css("sup").each do |node|
+        if node.text.match?(/\A(st|nd|rd|th)\z/i)
+          node.replace(Nokogiri::XML::Text.new(node.text, doc))
+        end
+      end
+    end
+
+    # =========================================================
+    # 3. WRAP BODY CONTENT
+    # =========================================================
+
+    wrapper = Nokogiri::XML::Node.new("div", doc)
+    wrapper["class"] = "squiz-body"
+
+    body.children.to_a.each do |child|
+      wrapper.add_child(child)
+    end
+
+    body.replace(wrapper)
+
+    wrapper.to_html
   end
 end
