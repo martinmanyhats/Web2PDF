@@ -78,18 +78,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_15_173305) do
   end
 
   create_table "wordpress_items", force: :cascade do |t|
+    t.integer "asset_id", null: false
     t.datetime "created_at", null: false
     t.integer "itemid", null: false
     t.string "slug", null: false
-    t.string "squiz_url", null: false
     t.datetime "updated_at", null: false
     t.string "url", null: false
+    t.index ["asset_id"], name: "index_wordpress_items_on_asset_id"
     t.index ["itemid"], name: "index_wordpress_items_on_itemid"
-    t.index ["squiz_url"], name: "index_wordpress_items_on_squiz_url", unique: true
   end
 
   add_foreign_key "asset_urls", "assets"
   add_foreign_key "assets", "websites"
   add_foreign_key "links", "assets", column: "destination_id"
   add_foreign_key "links", "assets", column: "source_id"
+  add_foreign_key "wordpress_items", "assets"
 end

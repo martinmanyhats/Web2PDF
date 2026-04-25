@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Squiz
- * Version: 2.4.0
+ * Version: 2.5.0
  * Author: Martin Reed <martin@martinreed.co.uk>
  * Description: Rails-driven asset registry with classic WordPress UI support.
  */
@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) exit;
 class Squiz {
 
     public static function boot() {
-        add_action('init', [__CLASS__, 'register_meta']);
+        add_action('rest_api_init', [__CLASS__, 'register_meta']);
         add_action('rest_api_init', [__CLASS__, 'register_routes']);
         add_action('add_meta_boxes', [__CLASS__, 'register_page_meta_box']);
         add_action('add_meta_boxes_attachment', [__CLASS__, 'register_attachment_meta_box']);
@@ -24,21 +24,17 @@ class Squiz {
      */
     public static function register_meta() {
 
-        register_meta('post', 'assetid', [
-            'object_subtype'   => 'page',
+        $args = [
+            'description'      => 'Squiz Asset #',
             'type'             => 'integer',
             'single'           => true,
             'show_in_rest'     => true,
-            'sanitize_callback'=> [__CLASS__, 'sanitize_assetid'],
-        ]);
-
-        register_meta('post', 'assetid', [
-            'object_subtype'   => 'attachment',
-            'type'             => 'integer',
-            'single'           => true,
-            'show_in_rest'     => true,
-            'sanitize_callback'=> [__CLASS__, 'sanitize_assetid'],
-        ]);
+            'sanitize_callback'=> function($value) {
+              return (is_numeric($value) && $value > 0) ? (int) $value : null;
+            },
+        ];
+        register_post_meta('post', 'assetid', $args);
+        register_post_meta('attachment', 'assetid', $args);
     }
 
     public static function sanitize_assetid($value) {
@@ -72,17 +68,28 @@ class Squiz {
     public static function set_assetid($request) {
 
         $post_id = (int) $request['post_id'];
-        $assetid = (int) $request['assetid'];
+        //$assetid = (int) $request['assetid'];
+        $assetid = $request['assetid'];
 
         if (!$post_id || !$assetid) {
             return new WP_REST_Response(['error' => 'invalid_request'], 400);
+        }
+
+        if ($assetid <= 0) {
+          return new WP_REST_Response(['error' => 'invalid assetid'], 400);
         }
 
         if (get_post_meta($post_id, 'assetid', true)) {
             return new WP_REST_Response(['error' => 'already_set'], 409);
         }
 
-        update_post_meta($post_id, 'assetid', $assetid);
+        $written = update_post_meta($post_id, 'assetid', $assetid);
+        if ($written === false) {
+            return new WP_REST_Response([
+                'ok' => false,
+                'error' => 'update_failed'
+            ], 500);
+        }
 
         return [
             'ok' => true,
@@ -126,7 +133,7 @@ class Squiz {
 
         add_meta_box(
             'squiz_assetid_page',
-            'Asset ID',
+            'Squiz',
             [__CLASS__, 'render_meta_box'],
             'page',
             'side'
@@ -142,7 +149,7 @@ class Squiz {
 
         add_meta_box(
             'squiz_assetid_attachment',
-            'Asset ID',
+            'Squiz',
             [__CLASS__, 'render_meta_box'],
             'attachment',
             'side'
@@ -158,7 +165,7 @@ class Squiz {
 
         $value = (int) get_post_meta($post->ID, 'assetid', true);
 
-        echo '<label style="font-weight:600;">Asset ID</label>';
+        echo '<label style="font-weight:600;">Asset #</label>';
         echo '<input type="number" readonly style="width:100%;margin-top:5px;" value="' . esc_attr($value) . '">';
 
         echo '<p style="font-size:11px;color:#666;margin-top:6px;">

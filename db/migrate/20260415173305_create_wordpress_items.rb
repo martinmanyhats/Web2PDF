@@ -4,7 +4,7 @@ class CreateWordpressItems < ActiveRecord::Migration[8.1]
       t.integer :itemid, null: false, index: true
       t.string :slug, null: false
       t.string :url, null: false
-      t.string :squiz_url, null: false, index: { unique: true }
+      t.references :asset, null: false, foreign_key: true
 
       t.timestamps
     end

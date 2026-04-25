@@ -4,6 +4,8 @@ require 'open-uri'
 class DataAsset < Asset
   scope :publishable, -> { where(status: "linked") }
 
+  URL_REGEX = %r{__data/assets/image/\d+/(?<assetid>\d+)/(?<filename>[^/]+)}
+
   def self.generate(assets)
     super
     generate_toc(assets)
@@ -69,13 +71,21 @@ class DataAsset < Asset
 
   def self.toc_destination_name = "w2p-destination-#{toc_basename}"
 
+  def self.asset_from_data_url(url)
+    matches = url.match(%r{__data/assets/\w+/\d+/(?<assetid>\d+)/})
+    raise "DataAsset:asset_from_data_url missing assetid #{url}" if matches.nil? || matches[:assetid].nil?
+    asset = Asset.find_by(assetid: matches[:assetid])
+    raise "DataAsset:asset_from_data_url asset not found #{matches[0]}" unless asset
+    asset
+  end
+
   private
 
   def filename_from_data_url
     raise "DataAsset:filename_from_data_url missing asset_url" if asset_urls.empty?
-    matches = url.match(%r{__data/assets/\w+/\d+/\d+/(.*)$})
-    raise "DataAsset:filename_from_data_url cannot parse url #{url}" if matches.nil?
-    matches.captures[0]
+    matches = url.match(URL_REGEX)
+    raise "DataAsset:filename_from_data_url missing filename #{url}" if matches.nil? || matches[:filename].nil?
+    matches[:filename]
   end
 
   # include/general.inc

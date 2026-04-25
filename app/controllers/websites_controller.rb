@@ -102,11 +102,11 @@ class WebsitesController < ApplicationController
       username: Rails.application.credentials.dig(:wordpress, :username),
       application_password: Rails.application.credentials.dig(:wordpress, :app_password)
     )
-    # p "image_assets.count #{@website.image_assets.count} publishable #{ImageAsset.publishable.count}"
-    # wordpress.upload_image_assets(@website, @website.image_assets.publishable)
+    p "image_assets.count #{@website.image_assets.count} publishable #{ImageAsset.publishable.count}"
+    # wordpress.upload_image_assets(@website.image_assets.publishable)
     p "content_assets.count #{@website.content_assets.count}"
-    # wordpress.upload_content(@website, ContentAsset.where(assetid: [153,17873]))
-    wordpress.upload_content(@website, @website.content_assets.publishable.first(20))
+    # wordpress.upload_content_pages(@website, ContentAsset.where(assetid: [14097]))
+    wordpress.upload_content_pages(@website, @website.content_assets.publishable)
   end
 
   private

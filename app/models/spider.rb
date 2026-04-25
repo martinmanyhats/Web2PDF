@@ -14,6 +14,7 @@ class Spider
 
     doc = Nokogiri::HTML(@asset.content_html)
     spiderable_links(doc).each { spider_link(it) }
+    spider_images(doc)
 
     @asset.status = "spidered"
     @asset.content_html = doc.to_html
@@ -67,7 +68,7 @@ class Spider
           node["href"] = linked_asset.redirect_url
           return
         end
-        linked_asset = Asset.asset_for_uri(@website, linked_asset.redirect_url)  # XYZ
+        linked_asset = Asset.asset_for_uri(@website, linked_asset.redirect_url)
         raise "Spider:spider_link indirect missing asset uri #{uri}" if linked_asset.nil?
         raise "Spider:spider_link triple indirect" if linked_asset.is_a?(RedirectPageAsset)
       end
@@ -78,6 +79,25 @@ class Spider
     Rails.logger.silence do
       Link.find_or_create_by!(source: @asset, destination: linked_asset)
       linked_asset.save!
+    end
+  end
+
+  def spider_images(doc)
+    doc.css("img[src]").each do |img|
+      src = img["src"]
+      next unless @website.internal?(src)
+      next unless src =~ %r{__data/assets/}
+      if src =~ %r{/varieties/}
+        # Replace with full size image.
+        p "!!! spider_images replacing variety #{src}"
+        image_asset = ImageAsset.asset_from_data_url(src)
+        img["src"] = image_asset.url
+      else
+        image_asset = Asset.asset_for_uri(@website, src)
+      end
+      raise "Spider:spider_images asset not found #{src}" unless image_asset
+      image_asset.status = "linked"
+      image_asset.save!
     end
   end
 

@@ -16,7 +16,8 @@ class AssetUrl < ApplicationRecord
   def self.remap_and_find_by_uri(website, uri)
     Rails.logger.silence do
       asset_url = AssetUrl.find_by(url: AssetUrl.remap_uri(website, uri).to_s)
-      raise "AssetUrl:remap_and_find_by_uri uri not found #{uri}" if asset_url.nil?
+      # raise "AssetUrl:remap_and_find_by_uri uri not found #{uri}" if asset_url.nil?
+      puts "@@@@@@ AssetUrl:remap_and_find_by_uri uri not found #{uri}" if asset_url.nil?
       asset_url
     end
   end

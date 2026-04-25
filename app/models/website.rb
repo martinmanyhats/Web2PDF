@@ -9,8 +9,6 @@ class Website < ApplicationRecord
   broadcasts_refreshes
   after_update_commit -> { broadcast_refresh_later }
 
-  # FileAsset = Struct.new(:assetid, :short_name, :filename, :url, :digest)
-
   def spider(options = {})
     p "!!! Website::spider options #{options.inspect} #{inspect}"
     Asset.get_published_assets(self) unless options[:skipassets].present?

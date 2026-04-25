@@ -7,6 +7,10 @@ class ImageAsset < DataAsset
   def self.toc_name = "Images"
   def asset_link_type = parents.any?(DolLargeImageAsset) ? "extasset" : "intasset"
 
+  def upload
+
+  end
+
   def generate
     header_height = 16
     image_pdf = HexaPDF::Document.new

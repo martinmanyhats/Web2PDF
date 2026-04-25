@@ -104,7 +104,7 @@ class ContentAsset < Asset
   def document
     @_document ||=
       begin
-        uri = URI.parse("#{asset_urls.first.url}")
+        uri = URI.parse("#{url}")
         # p ">>>>>>>>>>>>>>>>>>>> document HTTParty.get uri #{uri}"
         response = HTTParty.get(uri, {
           headers: Website.http_headers,
