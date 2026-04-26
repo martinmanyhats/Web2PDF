@@ -9,10 +9,23 @@ class Wordpress
     @auth_header = "Basic #{Base64.strict_encode64("#{username}:#{application_password}")}"
   end
 
+  def upload_static_media
+    Dir.glob(Rails.root.join("wordpress/static_media/*")).each do |path|
+      next unless File.file?(path)
+      filename = File.basename(path)
+      slug = filename.gsub(%r{\.}, "-")
+      p "!!! upload_static_media path #{path} filename #{filename}"
+      File.open(path, "rb") do |data|
+        upload_media(data, mime_type(filename), filename, slug)
+      end
+    end
+  end
+
   def upload_image_assets(assets)
     assets.each do |asset|
       upload_media_asset(asset)
     end
+    upload_static_media
   end
 
   def upload_file_assets(assets)
@@ -38,6 +51,10 @@ class Wordpress
     rescue => e
       raise "Wordpress:upload_media_asset file not loaded #{asset.assetid} #{e.inspect}"
     end
+    name = "#{asset.assetid}-#{File.basename(asset.url)}"
+    slug = wordpress_slug(asset)
+    upload_response = upload_media(data, mime_type(asset.url), name, slug)
+=begin
     begin
       file = Faraday::Multipart::FilePart.new(
         data,
@@ -58,7 +75,31 @@ class Wordpress
     rescue => e
       raise "Wordpress:upload_media_asset unable to upload #{asset.assetid} #{asset.url}: #{e.inspect}"
     end
+=end
     create_wordpress_item(upload_response["id"].to_i, upload_response["link"], upload_response["slug"], asset)
+    upload_response
+  end
+
+  def upload_media(data, mime_type, name, slug)
+    begin
+      file = Faraday::Multipart::FilePart.new(
+        data,
+        mime_type,
+        name
+      )
+      payload = {
+        file: file,
+        slug: slug,
+        title: name,
+        alt: name
+      }
+      p "!!! upload_media payload #{payload.inspect}"
+      upload_response = connection.post("media", payload)
+      upload_response = handle_response(upload_response)
+      raise "Wordpress:upload_media slug mismatch #{slug}:#{upload_response["slug"]} #{name}" if slug != upload_response["slug"]
+    rescue => e
+      raise "Wordpress:upload_media unable to upload #{name}: #{e.inspect}"
+    end
     upload_response
   end
 
@@ -226,6 +267,20 @@ class Wordpress
 
     body = doc.at("body")
     raise "Wordpress:extract_body missing body" unless body
+
+    # =========================================================
+    # 0. PREVENT WORDPRESS wpautop FROM TURNING LINE BREAKS
+    #    INSIDE TEXT NODES INTO <br>
+    # =========================================================
+
+    body.traverse do |node|
+      next unless node.text?
+      next if node.ancestors.any? { |a| %w[pre code textarea script style].include?(a.name) }
+      node.content = node.content
+                         .gsub(/\r\n?/, "\n")          # normalize CRLF / CR
+                         .gsub(/[ \t]*\n+[ \t]*/, " ") # collapse line breaks to spaces
+                         .gsub(/[ \t]{2,}/, " ")       # collapse repeated spaces
+    end
 
     # =========================================================
     # 1. STABILISE ANCHOR → TEXT BOUNDARIES

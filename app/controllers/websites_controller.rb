@@ -102,13 +102,14 @@ class WebsitesController < ApplicationController
       username: Rails.application.credentials.dig(:wordpress, :username),
       application_password: Rails.application.credentials.dig(:wordpress, :app_password)
     )
+    wordpress.upload_static_media
     p "image_assets.count #{@website.image_assets.count} publishable #{ImageAsset.publishable.count}"
-    wordpress.upload_image_assets(@website.image_assets.publishable)
+    #wordpress.upload_image_assets(@website.image_assets.publishable)
     p "pdf_assets.count #{@website.pdf_file_assets.count} publishable #{PdfFileAsset.publishable.count}"
-    wordpress.upload_file_assets(@website.pdf_file_assets.publishable) # TODO just use data_assets
+    #wordpress.upload_file_assets(@website.pdf_file_assets.publishable) # TODO just use data_assets
     p "content_assets.count #{@website.content_assets.count}"
-    # wordpress.upload_content_pages(@website, ContentAsset.where(assetid: [19260]))
-    wordpress.upload_content_pages(@website, @website.content_assets.publishable)
+    #wordpress.upload_content_pages(@website, ContentAsset.where(assetid: [14046]))
+    #wordpress.upload_content_pages(@website, @website.content_assets.publishable)
   end
 
   private

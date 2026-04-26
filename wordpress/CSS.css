@@ -8,19 +8,59 @@ li {
     font-weight: 400;
 }
 
+body, .site {
+    background-color: white;
+}
+
+.site-header {
+    background-color: #f2e9d3;
+    background: #f2e9d3 url('/wp-content/uploads/2026/04/menupics.jpg') top right no-repeat;
+    min-height: 96px;
+}
+
+#masthead .site-branding .main-title a,
+#masthead .site-branding .main-title a:hover,
+#masthead .site-branding .main-title a:visited {
+    font-size: 1rem !important;
+    font-weight: 400;
+}
+
+p {
+    margin-bottom: 1em;
+}
+
 /* Headings */
-h1, .wp-block-post-title {
+h1 {
     font-size: 120%;
     font-weight: 500;
     position: relative;
     padding: 6px 0 6px 10px;
     color: #0086B2;
-    background-color: #EDE5D3;
+    background-color: #f2e9d3;
 }
 
-.wp-block-site-title {
+h2 {
+    position: relative;
+    padding: 6px 0 0px 12px;
+    margin-left: -12px;
+    margin-top: 0.75em;
+    margin-bottom: 6px;
     font-size: 120%;
-    color: #0086B2;
+    font-weight: 600;
+}
+
+h3 {
+    font-size: 110%;
+    margin-bottom: 4px;
+}
+
+h4, h5, h6 {
+    margin-bottom: 2px;
+}
+
+ul {
+    margin-top: 2px;
+    margin-bottom: 2px;
 }
 
 /* Asset listing */
@@ -85,7 +125,7 @@ h2::after {
     top: 0;
     left: -4px;
     height: 2px;
-    width: 56px;
+    width: 64px;
 }
 
 /* Superscript */
@@ -96,4 +136,94 @@ sup {
     top: -0.4em;
     line-height: 0;
     font-family: inherit;
+}
+
+a:link {
+    color: #0086B2;
+    text-decoration: none;
+}
+
+a:visited {
+    color: #0086B2;
+    text-decoration: none;
+}
+
+a:hover {
+    color: #00A6DC;
+    text-decoration: none;
+    border-bottom: 1px dotted #0086B2;
+}
+
+a.nohover {
+    text-decoration: none;
+    border-bottom: none;
+}
+
+a:hover img {
+    text-decoration: none;
+    border-bottom: none;
+}
+
+img.pad-top {
+    padding-top: 6px;
+}
+
+img.pad-bottom {
+    padding-bottom: 6px;
+}
+
+img.pad-left {
+    padding-left: 8px;
+}
+
+img.pad-right {
+    padding-right: 8px;
+}
+
+.captioned-picture-left {
+    float: left;
+    margin-left: 8px;
+}
+
+.captioned-picture-right {
+    float: right;
+    margin-left: 8px;
+}
+
+.captioned-picture-left img, .captioned-picture-right img {
+    left: auto;
+    right: 0px;
+}
+
+.picture-caption {
+    text-align: center;
+    font-style: italic;
+    font-size: 85%;
+}
+
+.smaller {
+    font-size: 85%;
+}
+
+.larger {
+    font-size: 110%;
+}
+
+.poi {
+    font-family: Times;
+    font-style: italic;
+}
+
+@media screen and (max-width: 768px) {
+    #masthead .site-branding .main-title a,
+    #masthead .site-branding .main-title a:hover,
+    #masthead .site-branding .main-title a:visited {
+        text-shadow:
+                0 0 1px #fff,
+                0 0 2px #fff,
+                0 0 4px #fff,
+                0 0 7px #fff,
+                0 0 11px rgba(255,255,255,1),
+                0 0 18px rgba(255,255,255,1);
+    }
 }
