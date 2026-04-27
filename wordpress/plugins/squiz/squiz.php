@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Squiz
- * Version: 2.5.0
+ * Version: 2.5.1
  * Author: Martin Reed <martin@martinreed.co.uk>
  * Description: Rails-driven asset registry with classic WordPress UI support.
  */
@@ -257,7 +257,6 @@ class Squiz {
             return;
         }
 
-error_log('render_after_masthead json' . $json);
         $slugs = json_decode($json, true);
 
         if (!is_array($slugs)) {
