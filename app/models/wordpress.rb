@@ -9,6 +9,7 @@ class Wordpress
     p "Wordpress @wp_api_url #{@wp_api_url} username #{username}"
   end
 
+=begin
   def upload_static_media
     Dir.glob(Rails.root.join("wordpress/static_media/*")).each do |path|
       next unless File.file?(path)
@@ -20,12 +21,12 @@ class Wordpress
       end
     end
   end
+=end
 
   def upload_image_assets(assets)
     assets.each do |asset|
       upload_media_asset(asset)
     end
-    upload_static_media
   end
 
   def upload_file_assets(assets)
@@ -102,7 +103,6 @@ class Wordpress
       if squiz_url =~ /\.(jpg,jpeg,gif,png)$/
         raise "Wordpress:update_internal_links found link to image #{content_asset.assetid} #{squiz_url}"
       else
-        p "<<<<< href squiz_url #{squiz_url}"
         asset = Asset.asset_for_uri(content_asset.website, squiz_url)
         if asset
           while asset.is_a?(RedirectPageAsset)
@@ -111,7 +111,7 @@ class Wordpress
           end
           p "!!! assetid #{asset.assetid}"
           # Link to what the Wordpress URL will be.
-          link["href"] = "#{@wp_api_url}/#{wordpress_slug(asset)}"
+          link["href"] = "/#{wordpress_slug(asset)}"
         else
           # raise "Wordpress:update_internal_links missing asset url #{squiz_url}"
           bad_links << squiz_url
@@ -150,8 +150,6 @@ class Wordpress
   def create_page(asset, content: nil, status: "publish")
     content = asset.content_html if content.nil?
     content = extract_body(content)
-    content << asset.clean_breadcrumbs_html
-    p "!!! content #{content}"
     p "!!! create_page assetid #{asset.assetid} canonical_url #{asset.canonical_url}"
     begin
       slug = wordpress_slug(asset)
@@ -175,7 +173,12 @@ class Wordpress
 
   def create_wordpress_item(itemid, url, slug, asset)
     wpitem = WordpressItem.create!(itemid: itemid, url: url, slug: slug, asset: asset)
-    set_assetid(wpitem, asset.assetid)
+    if asset.is_a?(ContentAsset)
+      breadcrumbs = asset.breadcrumb_assets.map { wordpress_slug(it) }.to_json
+      set_meta(wpitem, asset.assetid, {breadcrumbs: breadcrumbs})
+    else
+      set_meta(wpitem, asset.assetid)
+    end
   end
 
   def set_meta(wpitem, assetid, additional_meta = {})
@@ -198,23 +201,6 @@ class Wordpress
       # raise "Wordpress:set_meta error #{assetid} wpid #{wpitem.id} response #{response}"
     rescue => e
       raise "Wordpress:set_meta unable to set assetid #{assetid} wpid #{wpitem.id}: #{e.inspect}"
-    end
-  end
-
-  def set_assetid(wpitem, assetid)
-    raise "Wordpress:set_assetid missing assetid" unless assetid
-    begin
-      payload = {
-        post_id: wpitem.itemid,
-        assetid: assetid
-      }
-      response = connection.post("/wp-json/squiz/v2/asset", payload) do |req|
-        req.headers["Content-Type"] = "application/json"
-        req.body = payload.to_json
-      end
-      p "!!! set_assetid response #{response.inspect}"
-    rescue => e
-      raise "Wordpress:set_assetid unable to set assetid #{assetid} wpid #{wpitem.id}: #{e.inspect}"
     end
   end
 

@@ -1,3 +1,12 @@
+/*
+Theme Name: Squiz
+Theme URI: https://wpdhdev.martinreed.co.uk
+Description: Child theme for GeneratePress
+Author: Martin Reed <martinreed.co.uk>
+Template: generatepress
+Version: 1.2
+*/
+
 body,
 h1, h2, h3, h4, h5, h6
 p,
@@ -8,13 +17,19 @@ li {
     font-weight: 400;
 }
 
+table, td {
+    border-width: 0;
+}
+
 body, .site {
     background-color: white;
 }
 
 .site-header {
     background-color: #f2e9d3;
-    background: #f2e9d3 url('/wp-content/uploads/2026/04/menupics.jpg') top right no-repeat;
+    background-image: url('assets/images/menupics.jpg');
+    background-position: top right;
+    background-repeat: no-repeat;
     min-height: 96px;
 }
 
@@ -23,20 +38,55 @@ body, .site {
 #masthead .site-branding .main-title a:visited {
     font-size: 1rem !important;
     font-weight: 400;
+    border-bottom: 2px solid #ffdaa7;
 }
 
 p {
     margin-bottom: 1em;
 }
 
+.squiz-breadcrumbs {
+    text-align: right;
+    background: #f2e9d3;
+    padding: 8px 20px 0 0;
+    font-size: 85%;
+    line-height: 20px;
+}
+
+.squiz-breadcrumbs a {
+    color: #0086B2;
+    text-decoration: none;
+}
+
+.squiz-breadcrumbs a:hover {
+    color: #00A6DC;
+    border-bottom: 1px dotted #0086B2;
+}
+
+.squiz-breadcrumbs-separator {
+    margin: 0 4px;
+    color: #666;
+}
+
+#main, #main .inside-article {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+}
+
 /* Headings */
 h1 {
     font-size: 120%;
     font-weight: 500;
-    position: relative;
-    padding: 6px 0 6px 10px;
+    Xposition: relative;
+    padding: 0 0 6px 10px;
     color: #0086B2;
     background-color: #f2e9d3;
+    Xmargin-top: -24px;
+    margin-left: -40px;
+    margin-right: -40px;
+    padding-left: 40px;
+    padding-right: 40px;
+    Xz-index: 10;
 }
 
 h2 {
@@ -212,6 +262,36 @@ img.pad-right {
 .poi {
     font-family: Times;
     font-style: italic;
+}
+
+.leaders {
+    list-style: none;
+    padding-left: 0;
+}
+
+.leaders li {
+    display: flex;
+    align-items: baseline;
+}
+
+.leaders li span:first-child {
+    width: 40em;
+    min-width: 40em;
+    display: flex;
+    align-items: baseline;
+}
+
+.leaders li span:first-child::after {
+    content: " .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .";
+    flex: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    margin: 0 .4em;
+    color: #666;
+}
+
+.leaders li span:last-child {
+    white-space: nowrap;
 }
 
 @media screen and (max-width: 768px) {

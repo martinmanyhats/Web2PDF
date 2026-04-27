@@ -61,29 +61,31 @@ class ContentAsset < Asset
 
   def header_html
     html_title = "<span class='w2p-title'>#{title}</span>"
-    if home?
-      breadcrumb_assets = []
+    assets = breadcrumb_assets
+    if assets.present?
+      assets.prepend(ContentAsset.home) unless assets.first.home?
     else
-      breadcrumb_assets = Nokogiri::HTML(breadcrumbs_html).css("a").map do |crumb|
-        linked_asset = Asset.asset_for_uri(website, crumb.attributes["href"].value)  # XYZ
-        raise "ContentAsset:header_html cannot find asset url #{crumb.attributes["href"]}" if linked_asset.nil?
-        if linked_asset.is_a?(RedirectPageAsset)
-          p "!!! header_html redirection from #{linked_asset.assetid}"
-          linked_asset = Asset.asset_for_uri(website, linked_asset.redirect_url)  # XYZ
-          raise "ContentAsset:header_html cannot find redirect_url #{linked_asset.redirect_url}" if linked_asset.nil?
-        end
-        linked_asset
-      end
-      if breadcrumb_assets.present?
-        breadcrumb_assets.prepend(ContentAsset.home) unless breadcrumb_assets.first.home?
-      else
-        breadcrumb_assets = [ContentAsset.home] unless introduction?
-      end
+      assets = [ContentAsset.home] unless introduction?
     end
-    crumbs = breadcrumb_assets.map do |linked_asset|
+    crumbs = assets.map do |linked_asset|
       "<span class='w2p-breadcrumb'><a href='intasset://#{linked_asset.assetid}:#{assetid}'>#{linked_asset.short_name}</a></span>"
     end
     "<div class='w2p-header'>#{html_title}#{"<span class='w2p-breadcrumbs'>#{crumbs.join(" > ")}</span>"}</div>"
+  end
+
+  def breadcrumb_assets
+    return [] if home?
+    Nokogiri::HTML(breadcrumbs_html).css("a").map do |crumb|
+      linked_asset = Asset.asset_for_uri(website, crumb.attributes["href"].value)
+      raise "ContentAsset:header_html cannot find asset url #{crumb.attributes["href"]}" if linked_asset.nil?
+      if linked_asset.is_a?(RedirectPageAsset)
+        p "!!! header_html redirection from #{linked_asset.assetid}"
+        linked_asset = Asset.asset_for_uri(website, linked_asset.redirect_url)
+        raise "ContentAsset:header_html cannot find redirect_url #{linked_asset.redirect_url}" if linked_asset.nil?
+      end
+      linked_asset
+    end
+      .prepend(ContentAsset.home)
   end
 
   def extract_content_info
@@ -161,10 +163,6 @@ class ContentAsset < Asset
       # p "!!! #{name}? assetid #{assetid} vs #{FIXED_ASSETS[name]}"
       assetid == FIXED_ASSETS[name]
     end
-  end
-
-  def clean_breadcrumbs_html
-    breadcrumbs_html.gsub(%r{<br\s*/>|\n}, "").gsub(%r{\s+}, " ")
   end
 
   private
