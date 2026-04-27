@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
 class Wordpress
-  WP_BASE = "https://wpdh.martinreed.co.uk"
-  WP_API_BASE = "#{WP_BASE}/wp-json/wp/v2"
+  WP_API_BASE = "/wp-json/wp/v2"
 
-  def initialize(username:, application_password:)
-    p "Wordpress username #{username}"
+  def initialize(hostname, username:, application_password:)
+    @wp_api_url = "https://#{hostname}#{WP_API_BASE}"
     @auth_header = "Basic #{Base64.strict_encode64("#{username}:#{application_password}")}"
+    p "Wordpress @wp_api_url #{@wp_api_url} username #{username}"
   end
 
   def upload_static_media
@@ -41,7 +41,7 @@ class Wordpress
     end
   end
 
-  private
+  #private
 
   def upload_media_asset(asset)
     raise "Wordpress:upload_media_asset missing url #{asset.assetid}" unless asset.url
@@ -54,28 +54,6 @@ class Wordpress
     name = "#{asset.assetid}-#{File.basename(asset.url)}"
     slug = wordpress_slug(asset)
     upload_response = upload_media(data, mime_type(asset.url), name, slug)
-=begin
-    begin
-      file = Faraday::Multipart::FilePart.new(
-        data,
-        mime_type(asset.url),
-        "#{asset.assetid}-#{File.basename(asset.url)}"
-      )
-      slug = wordpress_slug(asset)
-      payload = {
-        file: file,
-        slug: slug,
-        title: asset.short_name,
-        alt: asset.short_name
-      }
-      p "!!! upload_media_asset payload #{payload.inspect}"
-      upload_response = connection.post("media", payload)
-      upload_response = handle_response(upload_response)
-      raise "Wordpress:upload_media_asset slug mismatch #{slug}:#{upload_response["slug"]} assetid #{asset.assetid}" if slug != upload_response["slug"]
-    rescue => e
-      raise "Wordpress:upload_media_asset unable to upload #{asset.assetid} #{asset.url}: #{e.inspect}"
-    end
-=end
     create_wordpress_item(upload_response["id"].to_i, upload_response["link"], upload_response["slug"], asset)
     upload_response
   end
@@ -133,7 +111,7 @@ class Wordpress
           end
           p "!!! assetid #{asset.assetid}"
           # Link to what the Wordpress URL will be.
-          link["href"] = "#{WP_BASE}/#{wordpress_slug(asset)}"
+          link["href"] = "#{@wp_api_url}/#{wordpress_slug(asset)}"
         else
           # raise "Wordpress:update_internal_links missing asset url #{squiz_url}"
           bad_links << squiz_url
@@ -172,6 +150,8 @@ class Wordpress
   def create_page(asset, content: nil, status: "publish")
     content = asset.content_html if content.nil?
     content = extract_body(content)
+    content << asset.clean_breadcrumbs_html
+    p "!!! content #{content}"
     p "!!! create_page assetid #{asset.assetid} canonical_url #{asset.canonical_url}"
     begin
       slug = wordpress_slug(asset)
@@ -196,6 +176,29 @@ class Wordpress
   def create_wordpress_item(itemid, url, slug, asset)
     wpitem = WordpressItem.create!(itemid: itemid, url: url, slug: slug, asset: asset)
     set_assetid(wpitem, asset.assetid)
+  end
+
+  def set_meta(wpitem, assetid, additional_meta = {})
+    raise "Wordpress:set_meta missing assetid" unless assetid
+    begin
+      payload = {
+        post_id: wpitem.itemid,
+        assetid: assetid
+      }
+      payload[:additional_meta] = additional_meta
+      response = connection.post("/wp-json/squiz/v2/asset_meta", payload) do |req|
+        req.headers["Content-Type"] = "application/json"
+        req.body = payload.to_json
+      end
+      p "!!! set_meta response #{response.inspect}"
+      raise "Wordpress:set_meta status failed #{response.inspect}" if response.status != 200
+      response = JSON.parse(response.body)
+      p "!!! set_meta response #{response.inspect}"
+      raise "Wordpress:set_meta response #{response["ok"]} error #{response["error"]}" unless response["ok"]
+      # raise "Wordpress:set_meta error #{assetid} wpid #{wpitem.id} response #{response}"
+    rescue => e
+      raise "Wordpress:set_meta unable to set assetid #{assetid} wpid #{wpitem.id}: #{e.inspect}"
+    end
   end
 
   def set_assetid(wpitem, assetid)
@@ -223,7 +226,7 @@ class Wordpress
       backoff_factor: 2,
       retry_block: -> (env:, options:, retry_count:, exception:, will_retry_in:) { p ">>>>>> retrying #{retry_count} after #{exception.inspect}" }
     }
-    conn = Faraday.new(url: WP_API_BASE) do |f|
+    conn = Faraday.new(url: @wp_api_url) do |f|
       f.request :multipart
       f.request :url_encoded
       f.adapter Faraday.default_adapter

@@ -99,10 +99,15 @@ class WebsitesController < ApplicationController
 
   def wordpress
     wordpress = Wordpress.new(
+      "wpdh#{"dev" if Rails.env.development?}.martinreed.co.uk",
       username: Rails.application.credentials.dig(:wordpress, :username),
       application_password: Rails.application.credentials.dig(:wordpress, :app_password)
     )
-    wordpress.upload_static_media
+    a = Asset.find_by(assetid:14046)
+    p "!!! calling set_meta a.wordpress_item #{a.wordpress_item.inspect}"
+    wordpress.set_meta(a.wordpress_item, 14046, {breadcrumbs: "xyzzy"})
+    return
+    #wordpress.upload_static_media
     p "image_assets.count #{@website.image_assets.count} publishable #{ImageAsset.publishable.count}"
     #wordpress.upload_image_assets(@website.image_assets.publishable)
     p "pdf_assets.count #{@website.pdf_file_assets.count} publishable #{PdfFileAsset.publishable.count}"

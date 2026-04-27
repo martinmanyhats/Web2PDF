@@ -163,6 +163,10 @@ class ContentAsset < Asset
     end
   end
 
+  def clean_breadcrumbs_html
+    breadcrumbs_html.gsub(%r{<br\s*/>|\n}, "").gsub(%r{\s+}, " ")
+  end
+
   private
 
   def generate_html_links
