@@ -2,7 +2,7 @@
 
 class Asset < ApplicationRecord
   belongs_to :website
-  has_many :asset_urls
+  has_many :asset_urls, dependent: :destroy
   has_many :links, dependent: :destroy, foreign_key: "source_id"
   has_one :wordpress_item
 
@@ -103,8 +103,14 @@ class Asset < ApplicationRecord
   def assetid_formatted = ASSETID_FORMAT % assetid
 
   def url
+    url = asset_urls.pick(:url)
+    raise "Asset:url no asset_urls #{assetid}" if url.nil?
+    raise "Asset:url no url #{assetid}" if url.blank?
+    url
+  end
+  def Xurl
     raise "Asset:url no asset_urls #{assetid}" if asset_urls.empty?
-    url = asset_urls.first.url
+    url = asset_urls.first&.url
     raise "Asset:url no url #{assetid}" if url.nil?
     url
   end

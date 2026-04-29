@@ -99,17 +99,21 @@ class WebsitesController < ApplicationController
 
   def wordpress
     wordpress = Wordpress.new(
+      @website,
       "wpdh#{"dev" if Rails.env.development?}.martinreed.co.uk",
       username: Rails.application.credentials.dig(:wordpress, :username),
       application_password: Rails.application.credentials.dig(:wordpress, :app_password)
     )
     p "image_assets.count #{@website.image_assets.count} publishable #{ImageAsset.publishable.count}"
-    #wordpress.upload_image_assets(@website.image_assets.publishable)
-    p "pdf_assets.count #{@website.pdf_file_assets.count} publishable #{PdfFileAsset.publishable.count}"
-    #wordpress.upload_file_assets(@website.pdf_file_assets.publishable) # TODO just use data_assets
+    # wordpress.upload_media_assets(@website.image_assets.publishable.first(10), media_type: "image")
+    p "document_assets.count #{@website.document_assets.count} publishable #{@website.document_assets.publishable.count}"
+    wordpress.upload_media_assets(DataAsset.where(assetid: [14050]))
+    #wordpress.upload_media_assets(@website.document_assets.publishable.first(10), media_type: "application")
+    p "document_assets.count #{@website.document_assets.count} publishable #{@website.document_assets.publishable.count}"
+    #wordpress.upload_media_assets(@website.document_assets.publishable.first(10), media_type: "application")
     p "content_assets.count #{@website.content_assets.count}"
-    #wordpress.upload_content_pages(@website, ContentAsset.where(assetid: [14046]))
-    wordpress.upload_content_pages(@website, @website.content_assets.publishable)
+    #wordpress.upload_content_pages(ContentAsset.where(assetid: [14046]))
+    #wordpress.upload_content_pages(@website.content_assets.publishable)
   end
 
   private

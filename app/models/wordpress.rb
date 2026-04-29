@@ -3,46 +3,31 @@
 class Wordpress
   WP_API_BASE = "/wp-json/wp/v2"
 
-  def initialize(hostname, username:, application_password:)
+  def initialize(website, hostname, username:, application_password:, delete_existing: true)
+    @website = website
     @wp_api_url = "https://#{hostname}#{WP_API_BASE}"
     @auth_header = "Basic #{Base64.strict_encode64("#{username}:#{application_password}")}"
+    @delete_existing = delete_existing
     p "Wordpress @wp_api_url #{@wp_api_url} username #{username}"
   end
 
-=begin
-  def upload_static_media
-    Dir.glob(Rails.root.join("wordpress/static_media/*")).each do |path|
-      next unless File.file?(path)
-      filename = File.basename(path)
-      slug = filename.gsub(%r{\.}, "-")
-      p "!!! upload_static_media path #{path} filename #{filename}"
-      File.open(path, "rb") do |data|
-        upload_media(data, mime_type(filename), filename, slug)
-      end
+  def upload_media_assets( assets)
+    if @delete_existing
+      delete_items("media")
+      @website.data_assets.destroy_all
     end
-  end
-=end
-
-  def upload_image_assets(assets)
     assets.each do |asset|
       upload_media_asset(asset)
     end
   end
 
-  def upload_file_assets(assets)
-    assets.each do |asset|
-      upload_media_asset(asset)
-    end
-  end
-
-  def upload_content_pages(website, assets)
+  def upload_content_pages(assets)
     assets.each do |asset|
       updated_doc = process_linked_assets(asset)
       create_page(asset, content: updated_doc.to_s)
     end
+    set_home_page
   end
-
-  #private
 
   def upload_media_asset(asset)
     raise "Wordpress:upload_media_asset missing url #{asset.assetid}" unless asset.url
@@ -93,7 +78,7 @@ class Wordpress
     internal_links = doc.css("a[href]")
                         .select { it["href"].match?(%r{^https?://}) }
                         .select { !it["href"].match?(%r{/(mainmenu|reports|testing)}) }
-                        .select { content_asset.website.internal?(it["href"]) }
+                        .select { @website.internal?(it["href"]) }
     p "!!! internal links count #{internal_links.count}"
     bad_links = []
     internal_links.each do |link|
@@ -103,10 +88,10 @@ class Wordpress
       if squiz_url =~ /\.(jpg,jpeg,gif,png)$/
         raise "Wordpress:update_internal_links found link to image #{content_asset.assetid} #{squiz_url}"
       else
-        asset = Asset.asset_for_uri(content_asset.website, squiz_url)
+        asset = Asset.asset_for_uri(@website, squiz_url)
         if asset
           while asset.is_a?(RedirectPageAsset)
-            asset = Asset.asset_for_uri(content_asset.website, asset.redirect_url)
+            asset = Asset.asset_for_uri(@website, asset.redirect_url)
             p "@@@ redirecting to #{asset.assetid} #{asset.url}"
           end
           p "!!! assetid #{asset.assetid}"
@@ -128,7 +113,7 @@ class Wordpress
 
   def update_image_links(content_asset, doc)
     image_links = doc.css("img[src]")
-                     .select { content_asset.website.internal?(it["src"]) }
+                     .select { @website.internal?(it["src"]) }
     image_links.each do |img|
       # p "!!! img #{img}"
       squiz_url = img["src"]
@@ -204,6 +189,54 @@ class Wordpress
     end
   end
 
+  def set_home_page
+    if ContentAsset.home.nil?
+      p "!!! set_home_page home page not found"
+      return
+    end
+    home_page_wpitem = ContentAsset.home.wordpress_item
+    p "!!! set_home_page home_page_wpitem #{home_page_wpitem}"
+    begin
+      payload = {
+        show_on_front: "page",
+        page_on_front: home_page_wpitem.itemid
+      }
+      response = connection.post("#{@wp_api_url}/settings", payload) do |req|
+        req.headers["Content-Type"] = "application/json"
+        req.body = payload.to_json
+      end
+      p "!!! set_home_page response #{response.inspect}"
+      raise "Wordpress:set_home_page status failed #{response.inspect}" if response.status != 200
+    rescue => e
+      raise "Wordpress:set_home_page unable to set home page: #{e.inspect}"
+    end
+  end
+
+  def delete_items(type, media_type: nil, batch_size: 100)
+    p "!!! delete_items type #{type} media_type #{media_type}"
+    loop do
+      response = connection.get("/wp-json/wp/v2/#{type}") do |req|
+        req.params[:media_type] = media_type if media_type
+        req.params[:per_page] = batch_size
+        req.params[:page] = 1 # Page will differ after deletions.
+      end
+      raise "Wordpress:delete_items failed list request #{response.inspect}" unless response.status == 200
+
+      images = JSON.parse(response.body)
+      break if images.empty?
+      p "!!! images.count #{images.count}"
+
+      images.each do |img|
+        print "!!! deleting id #{img["id"]}\r"
+        $stdout.flush
+        response = connection.delete("/wp-json/wp/v2/media/#{img['id']}") do |req|
+          req.params[:force] = true
+        end
+        raise "Wordpress:delete_items failed deletion request #{response.inspect}" unless response.status == 200
+      end
+    end
+  end
+
   def connection
     retry_options = {
       max: 3,
@@ -234,13 +267,18 @@ class Wordpress
     when ".png" then "image/png"
     when ".gif" then "image/gif"
     when ".webp" then "image/webp"
+    when ".pdf" then "application/pdf"
+    when ".doc" then "application/msword"
+    when ".docx" then "application/application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    when ".xls" then "application/vnd.ms-excel"
+    when ".xlsx" then "application/application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     else "application/octet-stream"
     end
   end
 
   def wordpress_slug(asset)
     raise "Wordpress:wordpress_slug url missing" if asset.url.blank?
-    slug = asset.website.normalize(asset.url).path.gsub(%r{^/}, "")
+    slug = @website.normalize(asset.url).path.gsub(%r{^/}, "")
     # p "!!! pre-slug #{slug}"
     slug = slug.downcase
                .gsub(DataAsset::URL_REGEX, '\k<assetid>-\k<filename>')

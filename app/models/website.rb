@@ -2,10 +2,14 @@
 
 class Website < ApplicationRecord
   has_many :assets, dependent: :destroy
-  has_many :content_assets
-  has_many :file_assets
-  has_many :image_assets
-  has_many :pdf_file_assets
+  has_many :content_assets, dependent: :destroy
+  # has_many :file_assets, dependent: :destroy
+  has_many :image_assets, dependent: :destroy
+  has_many :video_file_assets, dependent: :destroy
+  has_many :data_assets, dependent: :destroy
+  has_many :document_assets,
+           -> { where(type: %w[PdfFileAsset MsExcelDocumentAsset MsWordDocumentAsset]) },
+           class_name: 'DataAsset'
 
   broadcasts_refreshes
   after_update_commit -> { broadcast_refresh_later }
