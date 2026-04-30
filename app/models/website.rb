@@ -3,12 +3,11 @@
 class Website < ApplicationRecord
   has_many :assets, dependent: :destroy
   has_many :content_assets, dependent: :destroy
-  # has_many :file_assets, dependent: :destroy
   has_many :image_assets, dependent: :destroy
   has_many :video_file_assets, dependent: :destroy
   has_many :data_assets, dependent: :destroy
-  has_many :document_assets,
-           -> { where(type: %w[PdfFileAsset MsExcelDocumentAsset MsWordDocumentAsset]) },
+  has_many :media_assets,
+           -> { where(type: %w[ImageAsset PdfFileAsset MsExcelDocumentAsset MsWordDocumentAsset]) },
            class_name: 'DataAsset'
 
   broadcasts_refreshes

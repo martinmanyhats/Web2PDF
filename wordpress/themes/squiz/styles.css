@@ -26,6 +26,10 @@ body, .site {
 }
 
 .site-header {
+    background: transparent;
+}
+
+.site-header .inside-header {
     background-color: #f2e9d3;
     background-image: url('assets/images/menupics.jpg');
     background-position: top right;
@@ -46,6 +50,10 @@ p {
 }
 
 .squiz-breadcrumbs {
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
     text-align: right;
     background: #f2e9d3;
     padding: 8px 20px 0 0;

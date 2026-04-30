@@ -11,28 +11,20 @@ class Wordpress
     p "Wordpress @wp_api_url #{@wp_api_url} username #{username}"
   end
 
-  def upload_media_assets( assets)
+  def upload_media_assets(assets)
+    p "!!! upload_media_assets count #{assets.count}"
     if @delete_existing
       delete_items("media")
-      @website.data_assets.destroy_all
     end
     assets.each do |asset|
       upload_media_asset(asset)
     end
   end
 
-  def upload_content_pages(assets)
-    assets.each do |asset|
-      updated_doc = process_linked_assets(asset)
-      create_page(asset, content: updated_doc.to_s)
-    end
-    set_home_page
-  end
-
   def upload_media_asset(asset)
     raise "Wordpress:upload_media_asset missing url #{asset.assetid}" unless asset.url
     begin
-      p "upload_media #{asset.url} mime_type #{mime_type(asset.url)}"
+      p "!!! upload_media #{asset.url} mime_type #{mime_type(asset.url)}"
       data = StringIO.new(URI.open(asset.url).read)
     rescue => e
       raise "Wordpress:upload_media_asset file not loaded #{asset.assetid} #{e.inspect}"
@@ -57,7 +49,6 @@ class Wordpress
         title: name,
         alt: name
       }
-      p "!!! upload_media payload #{payload.inspect}"
       upload_response = connection.post("media", payload)
       upload_response = handle_response(upload_response)
       raise "Wordpress:upload_media slug mismatch #{slug}:#{upload_response["slug"]} #{name}" if slug != upload_response["slug"]
@@ -65,6 +56,14 @@ class Wordpress
       raise "Wordpress:upload_media unable to upload #{name}: #{e.inspect}"
     end
     upload_response
+  end
+
+  def upload_content_pages(assets)
+    assets.each do |asset|
+      updated_doc = process_linked_assets(asset)
+      create_page(asset, content: updated_doc.to_s)
+    end
+    set_home_page
   end
 
   def process_linked_assets(content_asset)
@@ -83,7 +82,6 @@ class Wordpress
     bad_links = []
     internal_links.each do |link|
       squiz_url = link["href"]
-      p "!!! link #{squiz_url}"
       raise "Wordpress:update_internal_links blank href #{link.inspect}" if squiz_url.blank?
       if squiz_url =~ /\.(jpg,jpeg,gif,png)$/
         raise "Wordpress:update_internal_links found link to image #{content_asset.assetid} #{squiz_url}"
@@ -94,7 +92,6 @@ class Wordpress
             asset = Asset.asset_for_uri(@website, asset.redirect_url)
             p "@@@ redirecting to #{asset.assetid} #{asset.url}"
           end
-          p "!!! assetid #{asset.assetid}"
           # Link to what the Wordpress URL will be.
           link["href"] = "/#{wordpress_slug(asset)}"
         else
@@ -115,12 +112,12 @@ class Wordpress
     image_links = doc.css("img[src]")
                      .select { @website.internal?(it["src"]) }
     image_links.each do |img|
-      # p "!!! img #{img}"
       squiz_url = img["src"]
-      # p "!!! squiz_url #{squiz_url}"
       raise "Wordpress:update_image_links blank href #{img.inspect}" if squiz_url.blank?
       if squiz_url =~ %r{__data/.*\.(jpg|jpeg|gif|png)$}i
         asset = ImageAsset.asset_from_data_url(squiz_url)
+        raise "Wordpress:update_image_links missing asset #{squiz_url}" unless asset
+        raise "Wordpress:update_image_links missing wordpress_item assetid #{asset.assetid} #{squiz_url}" unless asset.wordpress_item
         img["src"] = asset.wordpress_item.url
       elsif squiz_url =~ %r{__lib/}
         p "!!! update_images_links __lib assetid #{content_asset.assetid} #{squiz_url}"
@@ -128,7 +125,6 @@ class Wordpress
         raise "Wordpress:update_image_links unknown image in assetid #{content_asset.assetid} #{img}"
       end
     end
-    # p "!!! update_image_links doc #{doc.to_s}"
     doc
   end
 
@@ -138,6 +134,7 @@ class Wordpress
     p "!!! create_page assetid #{asset.assetid} canonical_url #{asset.canonical_url}"
     begin
       slug = wordpress_slug(asset)
+      delete_wordpress_item(slug)
       payload = {
         title: asset.title,
         slug: slug,
@@ -156,8 +153,29 @@ class Wordpress
     end
   end
 
+  def delete_wordpress_item(slug)
+    # p "!!! delete_wordpress_item slug #{slug}"
+    response = connection.get("/wp-json/wp/v2/pages") do |req|
+      req.params[:slug] = slug
+      req.params[:per_page] = 1
+    end
+    raise "Wordpress:delete_wordpress_item failed lookup #{response.inspect}" unless response.status == 200
+    pages = JSON.parse(response.body)
+    return if pages.empty?
+
+    itemid = pages.first.fetch("id")
+    # p "!!! delete_wordpress_item itemid #{itemid}"
+    response = connection.delete("/wp-json/wp/v2/pages/#{itemid}") do |req|
+      req.params[:force] = true
+    end
+    raise "Wordpress:delete_wordpress_item failed delete #{response.inspect}" unless [200, 410].include?(response.status)
+  end
+
   def create_wordpress_item(itemid, url, slug, asset)
-    wpitem = WordpressItem.create!(itemid: itemid, url: url, slug: slug, asset: asset)
+    WordpressItem.delete_by(slug: slug)
+    wpitem = WordpressItem.create(itemid: itemid, slug: slug, url: url, asset: asset)
+    raise "Wordpress:create_wordpress_item missing item #{slug} #{itemid} #{asset.assetid}" unless wpitem
+    p "!!! create_wordpress_item wpitem #{wpitem.inspect}"
     if asset.is_a?(ContentAsset)
       breadcrumbs = asset.breadcrumb_assets.map { wordpress_slug(it) }.to_json
       set_meta(wpitem, asset.assetid, {breadcrumbs: breadcrumbs})
@@ -174,16 +192,14 @@ class Wordpress
         assetid: assetid
       }
       payload[:additional_meta] = additional_meta
+      p "!!! set_meta payload #{payload}"
       response = connection.post("/wp-json/squiz/v2/asset_meta", payload) do |req|
         req.headers["Content-Type"] = "application/json"
         req.body = payload.to_json
       end
-      p "!!! set_meta response #{response.inspect}"
       raise "Wordpress:set_meta status failed #{response.inspect}" if response.status != 200
       response = JSON.parse(response.body)
-      p "!!! set_meta response #{response.inspect}"
       raise "Wordpress:set_meta response #{response["ok"]} error #{response["error"]}" unless response["ok"]
-      # raise "Wordpress:set_meta error #{assetid} wpid #{wpitem.id} response #{response}"
     rescue => e
       raise "Wordpress:set_meta unable to set assetid #{assetid} wpid #{wpitem.id}: #{e.inspect}"
     end
@@ -201,6 +217,7 @@ class Wordpress
         show_on_front: "page",
         page_on_front: home_page_wpitem.itemid
       }
+      p "!!! payload #{payload}"
       response = connection.post("#{@wp_api_url}/settings", payload) do |req|
         req.headers["Content-Type"] = "application/json"
         req.body = payload.to_json
@@ -222,17 +239,17 @@ class Wordpress
       end
       raise "Wordpress:delete_items failed list request #{response.inspect}" unless response.status == 200
 
-      images = JSON.parse(response.body)
-      break if images.empty?
-      p "!!! images.count #{images.count}"
+      items = JSON.parse(response.body)
+      break if items.empty?
 
-      images.each do |img|
+      items.each do |img|
         print "!!! deleting id #{img["id"]}\r"
         $stdout.flush
         response = connection.delete("/wp-json/wp/v2/media/#{img['id']}") do |req|
           req.params[:force] = true
         end
         raise "Wordpress:delete_items failed deletion request #{response.inspect}" unless response.status == 200
+        WordpressItem.delete_by(itemid: img["id"])
       end
     end
   end
@@ -279,13 +296,11 @@ class Wordpress
   def wordpress_slug(asset)
     raise "Wordpress:wordpress_slug url missing" if asset.url.blank?
     slug = @website.normalize(asset.url).path.gsub(%r{^/}, "")
-    # p "!!! pre-slug #{slug}"
     slug = slug.downcase
                .gsub(DataAsset::URL_REGEX, '\k<assetid>-\k<filename>')
                .gsub(%r{[^a-z0-9\s\-_/]}, "")
                .gsub(%r{[\s\-_/]+}, "-")
                .gsub(/\A-+|-+\z/, "")
-    p "!!! slug #{slug}"
     slug
   end
 

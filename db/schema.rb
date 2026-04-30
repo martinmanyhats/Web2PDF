@@ -86,6 +86,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_15_173305) do
     t.string "url", null: false
     t.index ["asset_id"], name: "index_wordpress_items_on_asset_id"
     t.index ["itemid"], name: "index_wordpress_items_on_itemid"
+    t.index ["slug"], name: "index_wordpress_items_on_slug"
   end
 
   add_foreign_key "asset_urls", "assets"
